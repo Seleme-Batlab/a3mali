@@ -1,0 +1,2461 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light" data-lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نقطة البيع — أعمالي POS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/cashier.css" />
+  <style>
+    /* ── Service bar ── */
+    .service-bar {
+      display: flex;
+      align-items: center;
+      padding: 6px var(--sp-4, 16px) 4px;
+      border-bottom: 1px solid var(--border, #e5e7eb);
+      background: var(--surface, #fff);
+    }
+    .btn-add-service {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: var(--r, 8px);
+      border: 1.5px dashed #6366f1;
+      background: rgba(99,102,241,.06);
+      color: #6366f1;
+      font-size: var(--text-sm, 13px);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      font-family: inherit;
+    }
+    .btn-add-service:hover { background: rgba(99,102,241,.13); }
+    .btn-add-service:active { transform: scale(.95); }
+
+    /* ── Service currency toggle in modal ── */
+    .svc-cur-btn {
+      padding: 6px 14px;
+      border-radius: var(--r, 8px);
+      border: 1.5px solid var(--border, #e5e7eb);
+      background: var(--surface, #fff);
+      color: var(--text-muted, #6b7280);
+      font-size: var(--text-sm, 13px);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .svc-cur-btn.active {
+      border-color: #6366f1;
+      background: #6366f1;
+      color: #fff;
+    }
+
+    /* ── Service cart item ── */
+    .cart-item.is-service {
+      border-right: 3px solid #6366f1;
+      background: rgba(99,102,241,.04);
+    }
+    .svc-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 99px;
+      background: rgba(99,102,241,.12);
+      color: #6366f1;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .svc-cur-label {
+      font-size: 10px;
+      color: #6366f1;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    /* ── Stock-check overlay show state ── */
+    #stock-check-overlay.visible {
+      display: flex !important;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading-overlay" class="active"><div class="spinner"></div></div>
+<div id="toast-container"></div>
+<div id="offline-banner">📶 غير متصل — يتم الحفظ محلياً وستتم المزامنة تلقائياً عند عودة الإنترنت</div>
+
+<!-- ===========================
+     LOGIN LOCK SCREEN
+=========================== -->
+<!-- STAGE 1: account login (email + password → Firebase auth) -->
+<div id="account-lock">
+  <div class="pos-lock-card">
+    <div class="pos-lock-brand">
+      <div class="pos-lock-logo">ع</div>
+      <div>
+        <div class="pos-lock-title">أعمالي POS</div>
+        <div class="pos-lock-sub">تسجيل الدخول إلى حساب الشركة</div>
+      </div>
+    </div>
+
+    <div class="pos-lock-form">
+      <div class="form-group">
+        <label class="form-label">البريد الإلكتروني</label>
+        <input type="email" id="acct-email" class="form-input" dir="ltr" placeholder="you@company.com" autocomplete="username"
+          onkeydown="if(event.key==='Enter')document.getElementById('acct-password').focus()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور</label>
+        <input type="password" id="acct-password" class="form-input" dir="ltr" placeholder="••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')accountLogin()" />
+      </div>
+      <div id="acct-error" class="pos-lock-error">البريد الإلكتروني أو كلمة المرور غير صحيحة</div>
+      <button class="btn btn-primary pos-lock-btn" id="acct-login-btn" onclick="accountLogin()">🔓 دخول الحساب</button>
+    </div>
+
+    <a href="dashboard.html" class="pos-lock-back">← العودة إلى لوحة التحكم</a>
+  </div>
+</div>
+
+<!-- STAGE 2: cashier (employee) login -->
+<div id="pos-lock" style="display:none;">
+  <div class="pos-lock-card">
+    <div class="pos-lock-brand">
+      <div class="pos-lock-logo">ع</div>
+      <div>
+        <div class="pos-lock-title" id="lock-shop-name">أعمالي POS</div>
+        <div class="pos-lock-sub">نقطة البيع — تسجيل دخول الكاشير</div>
+      </div>
+    </div>
+
+    <div class="pos-lock-form">
+      <div class="form-group">
+        <label class="form-label">اسم المستخدم</label>
+        <input type="text" id="login-username" class="form-input" dir="ltr" placeholder="username" autocomplete="off"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور</label>
+        <input type="password" id="login-password" class="form-input" dir="ltr" placeholder="••••••" autocomplete="off"
+          onkeydown="if(event.key==='Enter')posLogin()" />
+      </div>
+      <div id="login-error" class="pos-lock-error">اسم المستخدم أو كلمة المرور غير صحيحة</div>
+      <button class="btn btn-primary pos-lock-btn" onclick="posLogin()">🔓 تسجيل الدخول</button>
+    </div>
+
+    <div class="pos-lock-chips" id="login-chips"></div>
+
+    <button type="button" class="pos-lock-back" onclick="accountSignOut()" style="background:none;border:none;cursor:pointer;">↩ تسجيل خروج الحساب</button>
+  </div>
+</div>
+
+<!-- ===========================
+     POS SHELL
+=========================== -->
+<div class="pos-shell" id="pos-shell" style="display:none;">
+
+  <!-- HEADER -->
+  <header class="pos-header">
+    <div class="pos-logo">
+      <div class="pos-logo-icon">ع</div>
+      <span id="header-shop-name">أعمالي POS</span>
+    </div>
+
+    <div class="pos-header-center">
+      <div class="pos-session-info">
+        <div class="pos-session-item">
+          <span class="pos-session-label">الكاشير</span>
+          <span class="pos-session-value" id="cashier-name">—</span>
+        </div>
+        <div class="pos-session-item">
+          <span class="pos-session-label">الوقت</span>
+          <span class="pos-session-value" id="session-clock">—</span>
+        </div>
+        <div class="pos-session-item">
+          <span class="pos-session-label">فواتير اليوم</span>
+          <span class="pos-session-value" id="session-count">0</span>
+        </div>
+        <div class="pos-session-item">
+          <span class="pos-session-label">مبيعات اليوم</span>
+          <span class="pos-session-value" id="session-total" style="color:var(--success);">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pos-header-right">
+      <div class="pos-sync-pill" id="sync-pill" title="حالة المزامنة">
+        <span class="pos-sync-dot"></span>
+        <span id="sync-text">متزامن</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <button class="btn btn-ghost btn-sm" onclick="syncNow(this)" id="sync-btn" title="مزامنة المنتجات">🔄</button>
+      <button class="btn btn-secondary btn-sm" onclick="printLastInvoice()" title="طباعة آخر فاتورة">🖨️ <span class="btn-text">آخر فاتورة</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="openInvoices()" title="الفواتير">🧾 <span class="btn-text">الفواتير</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="openMySales()" title="مبيعاتي">📋 <span class="btn-text">مبيعاتي</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="openSessionReport()" title="تقرير اليوم">📊 <span class="btn-text">تقرير اليوم</span></button>
+      <button class="btn btn-ghost btn-sm" onclick="posLogout()" title="تسجيل خروج الكاشير">🔒 <span class="btn-text">قفل</span></button>
+      <div class="avatar avatar-sm" style="background:var(--primary);" id="pos-avatar">م</div>
+    </div>
+  </header>
+
+  <!-- BODY -->
+  <div class="pos-body">
+
+    <!-- LEFT: PRODUCTS -->
+    <div class="products-panel">
+      <div class="products-toolbar">
+        <div class="products-search">
+          <div class="search-wrap">
+            <input class="search-input" type="text" id="product-search"
+              placeholder="ابحث باسم المنتج أو الباركود (F2)..."
+              onkeyup="searchProducts(this.value)" autocomplete="off" />
+            <span class="search-icon">🔍</span>
+          </div>
+        </div>
+        <div class="category-scroll" id="categories"></div>
+      </div>
+      <!-- Service bar -->
+      <div class="service-bar">
+        <button class="btn-add-service" onclick="openServiceModal()">⚙️ إضافة خدمة</button>
+      </div>
+
+      <div class="products-grid-wrap">
+        <div class="products-grid" id="products-grid"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: CART -->
+    <div class="cart-panel">
+      <div class="cart-header">
+        <div style="display:flex;align-items:center;gap:var(--sp-3);">
+          <span class="cart-title">الفاتورة</span>
+          <span class="cart-count" id="cart-count">0</span>
+        </div>
+        <div style="display:flex;gap:var(--sp-2);align-items:center;">
+          <span id="invoice-number" style="font-size:var(--text-xs);color:var(--text-muted);font-weight:600;">—</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearCart()" title="مسح الفاتورة">🗑️</button>
+          <button class="btn btn-ghost btn-sm cart-sheet-close" onclick="closeMobileCart()" title="إغلاق">✕</button>
+        </div>
+      </div>
+
+      <div class="cart-customer" onclick="openCustomerSelect()">
+        <span class="cart-customer-icon">👤</span>
+        <div>
+          <div class="cart-customer-text" id="selected-customer-name">اختر العميل (اختياري)</div>
+          <div style="font-size:var(--text-xs);color:var(--text-muted);" id="selected-customer-phone"></div>
+        </div>
+        <span style="color:var(--text-muted);margin-right:auto;">▼</span>
+      </div>
+
+      <div class="cart-items" id="cart-items">
+        <div class="cart-empty" id="cart-empty">
+          <div class="cart-empty-icon">🛒</div>
+          <div class="cart-empty-text">اضغط على منتج لإضافته</div>
+        </div>
+      </div>
+
+      <div class="cart-footer">
+        <div class="cart-totals" id="cart-totals">
+          <div class="total-row subtotal">
+            <span class="total-label">المجموع الفرعي</span>
+            <span class="total-value" id="subtotal">0</span>
+          </div>
+          <div class="total-row">
+            <div class="discount-row" style="width:100%;">
+              <input class="discount-input" type="number" id="discount-val" placeholder="خصم..." min="0" oninput="recalculate()" />
+              <select class="discount-type" id="discount-type" onchange="recalculate()">
+                <option value="amount">قيمة</option>
+                <option value="percent">%</option>
+              </select>
+            </div>
+          </div>
+          <div class="total-row discount" id="discount-row" style="display:none;">
+            <span class="total-label">الخصم</span>
+            <span class="total-value" id="discount-display">- 0</span>
+          </div>
+          <div class="total-row tax" id="tax-row" style="display:none;">
+            <span class="total-label" id="tax-label">ضريبة</span>
+            <span class="total-value" id="tax-display">0</span>
+          </div>
+          <div class="total-row grand">
+            <span class="total-label">الإجمالي</span>
+            <span class="total-value" id="grand-total">0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0 var(--sp-1);">
+            <span style="font-size:var(--text-xs);color:var(--text-muted);flex:1;">عملة الدفع</span>
+            <button class="btn btn-ghost btn-sm pay-cur-btn" id="pc-syp" onclick="selectPayCurrency('SYP')"
+              style="padding:2px 12px;font-size:var(--text-xs);border:1px solid var(--border);">ل.س</button>
+            <button class="btn btn-ghost btn-sm pay-cur-btn" id="pc-usd" onclick="selectPayCurrency('USD')"
+              style="padding:2px 12px;font-size:var(--text-xs);border:1px solid var(--border);">$</button>
+          </div>
+        </div>
+
+        <div style="font-size:var(--text-xs);color:var(--text-muted);font-weight:600;margin-bottom:var(--sp-2);">طريقة الدفع</div>
+        <div class="pay-select" id="pay-select">
+          <button type="button" class="pay-select-trigger" id="pay-select-trigger" onclick="togglePayMenu(event)">
+            <span class="pay-select-current">
+              <span class="pay-method-icon" id="pay-current-icon">💵</span>
+              <span id="pay-current-label">نقد</span>
+            </span>
+            <span class="pay-select-chevron">⌄</span>
+          </button>
+          <div class="pay-select-menu" id="pay-select-menu">
+            <div class="pay-method selected" id="pm-cash" onclick="selectPayment('cash')">
+              <span class="pay-method-icon">💵</span><span>نقد</span>
+            </div>
+            <div class="pay-method" id="pm-card" onclick="selectPayment('card')">
+              <span class="pay-method-icon">💳</span><span>بطاقة</span>
+            </div>
+            <div class="pay-method" id="pm-transfer" onclick="selectPayment('transfer')">
+              <span class="pay-method-icon">🏦</span><span>تحويل</span>
+            </div>
+            <div class="pay-method" id="pm-credit" onclick="selectPayment('credit')" style="color:var(--danger,#ef4444);">
+              <span class="pay-method-icon">📋</span><span>دين</span>
+            </div>
+          </div>
+        </div>
+        <!-- Credit sale customer warning -->
+        <div id="credit-customer-warning" style="display:none;padding:var(--sp-2) var(--sp-3);background:#fef2f2;border:1px solid #fca5a5;border-radius:var(--r);font-size:var(--text-xs);color:var(--danger,#ef4444);margin-top:var(--sp-2);">
+          ⚠️ البيع بالدين يتطلب تحديد العميل أولاً
+        </div>
+
+        <div id="cash-input-wrap" style="display:flex;gap:var(--sp-2);">
+          <div class="form-group" style="flex:1;">
+            <input type="number" class="form-input" id="cash-received" placeholder="المبلغ المستلم..." oninput="calcChange()" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:var(--sp-1);">
+            <button class="btn btn-ghost btn-sm" onclick="setExactCash()" title="مبلغ دقيق" style="font-size:var(--text-xs);white-space:nowrap;">= دقيق</button>
+            <div style="font-size:var(--text-xs);color:var(--text-muted);text-align:center;">الباقي</div>
+            <div style="font-weight:700;font-size:var(--text-lg);color:var(--success);text-align:center;" id="change-display">0</div>
+          </div>
+        </div>
+
+        <input type="text" class="form-input" placeholder="ملاحظة اختيارية..." id="order-notes" style="height:36px;font-size:var(--text-sm);" />
+
+        <button class="checkout-btn" id="checkout-btn" onclick="checkout()" disabled>
+          <span>💳</span>
+          <span id="checkout-label">إتمام البيع</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK CHECK OVERLAY -->
+  <div id="stock-check-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+    <div style="background:var(--surface,#fff);border-radius:16px;padding:32px 40px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+      <div class="spinner" style="margin:0 auto 16px;"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);">جارٍ التحقق من المخزون...</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">يرجى الانتظار</div>
+    </div>
+  </div>
+
+  <!-- MOBILE CART BACKDROP (phones only) -->
+  <div class="mobile-cart-backdrop" id="mobile-cart-backdrop" onclick="closeMobileCart()"></div>
+
+  <!-- MOBILE CART LAUNCHER BAR (phones only) -->
+  <div class="mobile-cart-bar" id="mobile-cart-bar" onclick="openMobileCart()">
+    <span class="mcb-count" id="mcb-count">0</span>
+    <span class="mcb-label">عرض السلة 🛒</span>
+    <span class="mcb-total" id="mcb-total">0</span>
+  </div>
+</div>
+
+<!-- CUSTOMER SELECT MODAL -->
+<div class="modal-overlay" id="customer-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">اختر العميل</h3>
+      <button class="modal-close" onclick="closeModal('customer-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div style="padding:var(--sp-4);border-bottom:1px solid var(--border);">
+        <div class="search-wrap">
+          <input class="search-input" type="text" id="cust-search" placeholder="البحث عن عميل..." oninput="filterModalCustomers(this.value)" />
+          <span class="search-icon">🔍</span>
+        </div>
+      </div>
+      <div id="customers-list" style="max-height:340px;overflow-y:auto;"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn btn-ghost btn-sm" onclick="selectCustomer(null)">بدون عميل</button>
+      <button class="btn btn-primary btn-sm" onclick="openNewCustomerQuick()">+ عميل جديد</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK NEW CUSTOMER MODAL -->
+<div class="modal-overlay" id="new-cust-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">عميل جديد</h3>
+      <button class="modal-close" onclick="closeModal('new-cust-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">الاسم <span style="color:var(--danger);">*</span></label>
+        <input type="text" class="form-input" id="nc-name" placeholder="اسم العميل" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">رقم الهاتف <span style="color:var(--danger);">*</span></label>
+        <input type="tel" class="form-input" id="nc-phone" dir="ltr" placeholder="+963 9x xxx xxxx" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('new-cust-modal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveQuickCustomer()">💾 حفظ واختيار</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL -->
+<div class="modal-overlay" id="receipt-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">إيصال المبيعة ✓</h3>
+      <button class="modal-close" onclick="closeModal('receipt-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="receipt" id="receipt-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('receipt-modal');newSale()">✕ إغلاق</button>
+      <button class="btn btn-primary" onclick="printReceipt()">🖨️ طباعة الإيصال</button>
+    </div>
+  </div>
+</div>
+
+<!-- SERVICE MODAL -->
+<div class="modal-overlay" id="service-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">⚙️ إضافة خدمة</h3>
+      <button class="modal-close" onclick="closeModal('service-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">اسم الخدمة <span style="color:var(--danger);">*</span></label>
+        <input type="text" class="form-input" id="svc-name" placeholder="مثال: فرمتة جهاز، تركيب برامج..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">السعر <span style="color:var(--danger);">*</span></label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="number" class="form-input" id="svc-price" placeholder="0" min="0" step="any" style="flex:1;" />
+          <button class="svc-cur-btn active" id="svc-cur-syp" onclick="selectSvcCur('SYP')">ل.س</button>
+          <button class="svc-cur-btn" id="svc-cur-usd" onclick="selectSvcCur('USD')">$</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ملاحظة (اختياري)</label>
+        <input type="text" class="form-input" id="svc-notes" placeholder="تفاصيل الخدمة..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('service-modal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="addService()">✚ إضافة للفاتورة</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION REPORT MODAL -->
+<div class="modal-overlay" id="session-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">تقرير اليوم 📊</h3>
+      <button class="modal-close" onclick="closeModal('session-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-4);margin-bottom:var(--sp-5);">
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-green">💰</div><div class="kpi-info"><div class="kpi-label">إجمالي مبيعات اليوم</div><div class="kpi-value" id="rep-total">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">🧾</div><div class="kpi-info"><div class="kpi-label">عدد الفواتير</div><div class="kpi-value" id="rep-count">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">📊</div><div class="kpi-info"><div class="kpi-label">متوسط الفاتورة</div><div class="kpi-value" id="rep-avg">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-violet">🕐</div><div class="kpi-info"><div class="kpi-label">أول فاتورة اليوم</div><div class="kpi-value" id="rep-start">—</div></div></div>
+      </div>
+      <h4 style="font-weight:700;margin-bottom:var(--sp-3);">مبيعات اليوم</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>الدفع</th><th>الوقت</th></tr></thead>
+          <tbody id="session-sales-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('session-modal')">إغلاق</button>
+      <button class="btn btn-primary" onclick="exportSessionReport()">📥 تصدير CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- MY SALES (per-cashier history) MODAL -->
+<div class="modal-overlay" id="mysales-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">سجل مبيعاتي 📋</h3>
+      <button class="modal-close" onclick="closeModal('mysales-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-4);margin-bottom:var(--sp-5);">
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-green">💰</div><div class="kpi-info"><div class="kpi-label">إجمالي مبيعاتي</div><div class="kpi-value" id="my-total">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">🧾</div><div class="kpi-info"><div class="kpi-label">عدد فواتيري</div><div class="kpi-value" id="my-count">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">📊</div><div class="kpi-info"><div class="kpi-label">متوسط الفاتورة</div><div class="kpi-value" id="my-avg">0</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-red">🏆</div><div class="kpi-info"><div class="kpi-label">الأكثر مبيعاً</div><div class="kpi-value" id="my-top" style="font-size:var(--text-base);">—</div></div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-3);flex-wrap:wrap;gap:var(--sp-3);">
+        <div id="mysales-range-btns" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="setMySalesRange('today', this)">اليوم</button>
+          <button class="btn btn-secondary btn-sm" onclick="setMySalesRange('yesterday', this)">أمس</button>
+          <button class="btn btn-secondary btn-sm" onclick="setMySalesRange('month', this)">هذا الشهر</button>
+          <button class="btn btn-secondary btn-sm" onclick="setMySalesRange('lastmonth', this)">الشهر الماضي</button>
+          <button class="btn btn-secondary btn-sm" onclick="setMySalesRange('all', this)">الكل</button>
+        </div>
+        <div class="search-wrap" style="max-width:240px;">
+          <input class="search-input" type="text" id="my-search" placeholder="بحث برقم الفاتورة أو العميل..." oninput="filterMySales(this.value)" />
+          <span class="search-icon">🔍</span>
+        </div>
+      </div>
+      <div class="table-wrap" style="max-height:380px;overflow-y:auto;">
+        <table class="table">
+          <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>الدفع</th><th>التاريخ والوقت</th></tr></thead>
+          <tbody id="my-sales-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('mysales-modal')">إغلاق</button>
+      <button class="btn btn-primary" onclick="exportMySales()">📥 تصدير CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICES (all POS invoices, oldest → newest, printable) MODAL -->
+<div class="modal-overlay" id="invoices-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">الفواتير 🧾</h3>
+      <button class="modal-close" onclick="closeModal('invoices-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-3);flex-wrap:wrap;gap:var(--sp-3);">
+        <div style="font-size:var(--text-sm);color:var(--text-muted);">
+          حدّد الفواتير المطلوبة ثم اطبعها معاً — مرتّبة من الأقدم إلى الأحدث
+        </div>
+        <div class="search-wrap" style="max-width:260px;">
+          <input class="search-input" type="text" id="inv-search" placeholder="بحث برقم الفاتورة أو العميل..." oninput="filterInvoices()" />
+          <span class="search-icon">🔍</span>
+        </div>
+      </div>
+      <div class="table-wrap" style="max-height:420px;overflow-y:auto;">
+        <table class="table">
+          <thead><tr>
+            <th style="text-align:center;width:36px;"><input type="checkbox" id="inv-check-all" onchange="toggleAllInvoices(this)" title="تحديد الكل" /></th>
+            <th style="width:40px;">#</th>
+            <th>رقم الفاتورة</th>
+            <th>العميل</th>
+            <th>المبلغ</th>
+            <th>الدفع</th>
+            <th>التاريخ والوقت</th>
+            <th style="text-align:center;">طباعة</th>
+          </tr></thead>
+          <tbody id="invoices-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('invoices-modal')">إغلاق</button>
+      <button class="btn btn-primary" id="inv-print-selected" onclick="printSelectedInvoices()" disabled>🖨️ طباعة المحدد (0)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     SCRIPTS
+=========================== -->
+<script src="./js/currency.js"></script>
+<script type="module">
+  import { OfflineDB } from './js/offline.js';
+  window.OfflineDB = OfflineDB;
+  try { OfflineDB.init(); } catch(e) { console.warn('OfflineDB init failed', e); }
+  // Reflect sync activity on the header pill
+  try {
+    OfflineDB.onSync((event, data) => {
+      if (event === 'syncing') window.setSyncState && window.setSyncState('syncing');
+      if (event === 'synced')  window.setSyncState && window.setSyncState(navigator.onLine ? 'online' : 'offline');
+    });
+  } catch(e) {}
+</script>
+
+<!-- ===========================================================
+     Firebase bridge — direct Firestore sync for the cashier.
+     Pulls the latest shared stores on load (merged by id) and
+     exposes window._fsSet/_fsGet so POS writes reach Firestore
+     at accounts/{acct}/data/{kind} (same layout as the dashboard).
+=========================================================== -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+  function _acctKey() {
+    let u = {};
+    try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
+    return u.uid || u.email || 'guest';
+  }
+
+  // Union two record arrays by id; on conflict keep the newer (by timestamp), else remote.
+  function _mergeById(localArr, remoteArr) {
+    const ts = o => Number(o && (o.updatedAt || o._updatedAt || o.timestamp || o.createdAt)) || 0;
+    const map = new Map();
+    (Array.isArray(remoteArr) ? remoteArr : []).forEach(o => { if (o && o.id != null) map.set(o.id, o); });
+    const extras = [];
+    (Array.isArray(localArr) ? localArr : []).forEach(o => {
+      if (!o) return;
+      if (o.id == null) { extras.push(o); return; }
+      const ex = map.get(o.id);
+      if (!ex || ts(o) > ts(ex)) map.set(o.id, o);
+    });
+    return Array.from(map.values()).concat(extras);
+  }
+
+  // 'invoices' intentionally excluded — it now lives in its own Firestore
+  // collection (accounts/{acct}/invoices/{id}), written per-document by
+  // checkout()'s OfflineDB.enqueue() call, not this legacy array-doc path.
+  const ARRAY_STORES = ['customers','products','suppliers','expenses','cashbox',
+                        'workOrders','employees','stockMoves','categories','debts','leaves'];
+  const OBJ_STORES   = ['settings','printTemplates'];
+
+  // Pull every shared store from Firestore and merge into localStorage.
+  async function _fsHydrate(db, acctKey) {
+    for (const kind of ARRAY_STORES) {
+      try {
+        const snap = await getDoc(doc(db, 'accounts/' + acctKey + '/data/' + kind));
+        if (!snap.exists()) continue;
+        const d = snap.data();
+        const remote = Array.isArray(d.items) ? d.items : (Array.isArray(d) ? d : []);
+        const localKey = 'a3mali_' + kind + '_' + acctKey;
+        let local = [];
+        try { local = JSON.parse(localStorage.getItem(localKey) || '[]'); } catch(e) {}
+        localStorage.setItem(localKey, JSON.stringify(_mergeById(local, remote)));
+      } catch(e) {}
+    }
+    for (const kind of OBJ_STORES) {
+      try {
+        const snap = await getDoc(doc(db, 'accounts/' + acctKey + '/data/' + kind));
+        if (!snap.exists()) continue;
+        const d = snap.data();
+        const remote = (d && d.items !== undefined) ? d.items : d;
+        const localKey = 'a3mali_' + kind + '_' + acctKey;
+        // Objects: only adopt remote when there is no local copy (avoid clobbering live edits).
+        if (localStorage.getItem(localKey) === null && remote && typeof remote === 'object') {
+          localStorage.setItem(localKey, JSON.stringify(remote));
+        }
+      } catch(e) {}
+    }
+  }
+
+  // Keep the cashier's local cache continuously fresh in the background so
+  // checkout() never reads a stale array. _fsSync ALWAYS overwrites the
+  // entire Firestore array with whatever this tab's local copy holds — if
+  // this tab has been open a while and missed a change made elsewhere
+  // (dashboard edit, another register), the next sale would silently erase
+  // that change server-side. Listening live (merge-only, never delete)
+  // closes that staleness window.
+  // 'invoices' excluded — see ARRAY_STORES note above; it's no longer this kind of store.
+  const LIVE_SYNC_KINDS = ['products','customers','debts','stockMoves','employees','leaves'];
+  function _startCashierLiveSync(db, acctKey) {
+    LIVE_SYNC_KINDS.forEach(kind => {
+      try {
+        onSnapshot(
+          doc(db, 'accounts/' + acctKey + '/data/' + kind),
+          (snap) => {
+            if (!snap.exists()) return;
+            const d = snap.data();
+            const remote = Array.isArray(d.items) ? d.items : [];
+            const localKey = 'a3mali_' + kind + '_' + acctKey;
+            let local = [];
+            try { local = JSON.parse(localStorage.getItem(localKey) || '[]'); } catch(e) {}
+            const merged = _mergeById(local, remote);
+            if (JSON.stringify(merged) === JSON.stringify(local)) return; // nothing actually new
+            localStorage.setItem(localKey, JSON.stringify(merged));
+            if (typeof window._onCashierLiveSync === 'function') window._onCashierLiveSync(kind, merged);
+          },
+          (_err) => { /* permission-denied or offline — POS continues from local cache */ }
+        );
+      } catch(e) {}
+    });
+  }
+
+  try {
+    const mod = await import('./js/config.js');
+    const app  = initializeApp(mod.firebaseConfig);
+    const db   = getFirestore(app);
+    const auth = getAuth(app);
+    window.__db   = db;
+    window.__auth = auth;
+    window._fsSet = (path, data) => setDoc(doc(db, path), data, { merge: true });
+    window._fsGet = (path)       => getDoc(doc(db, path));
+
+    try { await setPersistence(auth, browserLocalPersistence); } catch(_) {}
+
+    // STAGE 1 result: react to the company account's auth state.
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Make sure the account identity is in sessionStorage so _acctKey() resolves.
+        let su = {};
+        try { su = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
+        if (su.uid !== user.uid) {
+          su = { uid: user.uid, email: user.email, name: su.name || user.displayName || user.email };
+          sessionStorage.setItem('a3mali_user', JSON.stringify(su));
+        }
+        await _fsHydrate(db, _acctKey());
+        if (typeof window._afterFsHydrate === 'function') window._afterFsHydrate();
+        _startCashierLiveSync(db, _acctKey());
+        if (typeof window.__onAccountAuthed === 'function') window.__onAccountAuthed();
+      } else {
+        if (typeof window.__onAccountSignedOut === 'function') window.__onAccountSignedOut();
+      }
+    });
+
+    // STAGE 1 action: sign in with email + password.
+    window.accountLogin = async function() {
+      const email = (document.getElementById('acct-email').value || '').trim();
+      const pass  = (document.getElementById('acct-password').value || '');
+      const err   = document.getElementById('acct-error');
+      const btn   = document.getElementById('acct-login-btn');
+      if (err) err.style.display = 'none';
+      if (!email || !pass) {
+        if (err) { err.textContent = 'أدخل البريد الإلكتروني وكلمة المرور'; err.style.display = 'block'; }
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'جارٍ الدخول...'; }
+      try {
+        await signInWithEmailAndPassword(auth, email, pass);
+        // onAuthStateChanged() takes over from here (hydrate + show cashier login).
+      } catch(e) {
+        if (err) { err.textContent = 'البريد الإلكتروني أو كلمة المرور غير صحيحة'; err.style.display = 'block'; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔓 دخول الحساب'; }
+      }
+    };
+
+    window.accountSignOut = async function() {
+      try { await signOut(auth); } catch(e) {}
+      sessionStorage.removeItem('a3mali_pos_cashier');
+      sessionStorage.removeItem('a3mali_user');
+    };
+  } catch(e) {
+    console.warn('[Cashier] Firebase bridge unavailable — offline/local only:', e && e.message);
+    // No Firebase → fall back to local-only behavior (skip account login).
+    if (typeof window.__onAccountAuthed === 'function') window.__onAccountAuthed();
+  }
+</script>
+
+<script>
+// ============================================================
+//  أعمالي POS — Cashier (classic script)
+//  Offline-first, account-scoped, employee login, Firebase sync
+// ============================================================
+
+// ---------- Per-account storage (shared with the dashboard) ----------
+function _acctKey() {
+  let u = {};
+  try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
+  return u.uid || u.email || 'guest';
+}
+function _loadAcct(kind, fallback) {
+  try {
+    const raw = localStorage.getItem('a3mali_' + kind + '_' + _acctKey());
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch(e) { return fallback; }
+}
+function _saveAcct(kind, value) {
+  try { localStorage.setItem('a3mali_' + kind + '_' + _acctKey(), JSON.stringify(value)); } catch(e) {}
+}
+// Firestore path namespaced per account so no account can read/write another's data.
+// The segment equals the Firebase auth uid for signed-in users → matches the security rules.
+function _fbPath(coll) { return 'accounts/' + _acctKey() + '/' + coll; }
+
+// Dual-write a whole store to Firestore (accounts/{acct}/data/{kind}),
+// matching the dashboard layout so POS changes show up there too.
+function _fsSync(kind, data) {
+  if (!window._fsSet) return;
+  const acct    = _acctKey();
+  const authUid = window.__auth?.currentUser?.uid || '(no auth)';
+  console.log('[FS sync DEBUG] kind=' + kind + '  acctKey=' + acct + '  auth.uid=' + authUid);
+  const payload = Array.isArray(data)
+    ? { items: data, updatedAt: Date.now() }
+    : { ...data, _updatedAt: Date.now() };
+  try {
+    window._fsSet('accounts/' + acct + '/data/' + kind, payload)
+      .catch(e => console.warn('[FS sync]', kind, e));
+  } catch(e) {}
+}
+
+// Invoked once the Firebase bridge finishes hydrating from Firestore.
+window._afterFsHydrate = function() {
+  try { window._appSettings = _loadAcct('settings', {}) || window._appSettings || {}; } catch(e) {}
+  if (typeof posCashier !== 'undefined' && posCashier) {
+    if (typeof reloadProducts === 'function') reloadProducts();
+    if (typeof updateSessionBar === 'function') updateSessionBar();
+  }
+  if (typeof refreshSyncPill === 'function') refreshSyncPill();
+};
+
+// Invoked continuously by the background live-sync listener (see Firebase
+// bridge module above) whenever Firestore data changes elsewhere — keeps
+// the in-memory products/customers in sync with localStorage so the
+// products grid and customer search reflect changes without a manual sync.
+// invoices/debts/stockMoves have no live UI here; merging them into
+// localStorage is what matters (keeps checkout()'s next write from stomping
+// records this tab didn't know about).
+window._onCashierLiveSync = function(kind, merged) {
+  if (kind === 'products' && typeof posCashier !== 'undefined' && posCashier) {
+    products = merged.map(normalizeProduct);
+    cart = cart.filter(ci => products.some(p => p.id === ci.id));
+    const searchEl = document.getElementById('product-search');
+    renderCategories();
+    searchProducts(searchEl ? searchEl.value : '');
+    renderCart();
+  } else if (kind === 'customers') {
+    customers = merged;
+  } else if (kind === 'employees') {
+    // A manager may have suspended the active cashier — enforce immediately.
+    if (typeof enforceLeaveGuard === 'function' && enforceLeaveGuard()) return;
+    if (typeof renderLockChips === 'function' && (typeof posCashier === 'undefined' || !posCashier)) renderLockChips();
+  } else if (kind === 'leaves') {
+    // A leave was just approved elsewhere — if it covers the active cashier,
+    // end their session right away; otherwise refresh the lock-screen chips.
+    if (typeof enforceLeaveGuard === 'function' && enforceLeaveGuard()) return;
+    if (typeof renderLockChips === 'function' && (typeof posCashier === 'undefined' || !posCashier)) renderLockChips();
+  }
+};
+
+// ---------- State ----------
+let cart = [];
+let products = [];
+let filteredProducts = [];
+let customers = [];
+let sessionSales = [];
+let selectedCustomer = null;
+let selectedPayment = 'cash';
+let sessionTotal = 0;
+let sessionStartTime = null;
+let paymentCurrency = null;   // null = follows baseCur(); explicit = customer-chosen pay currency
+let _svcCurrency = 'SYP';    // currency chosen in service modal
+let activeCategory = 'all';
+let posCashier = null;       // { name, username, role }
+let VAT = 0;                 // read from settings.vatRate
+
+const CAT_LABELS = {
+  food:'مأكولات', drinks:'مشروبات', stationery:'قرطاسية',
+  electronics:'إلكترونيات', clothing:'ملابس', other:'أخرى',
+};
+const CAT_ICONS = {
+  food:'🍔', drinks:'☕', stationery:'📝', electronics:'📱',
+  clothing:'👔', other:'📦', all:'🏷️',
+};
+
+// ---------- Currency formatting ----------
+// All internal amounts are stored in window.Currency.base (e.g. SYP).
+// fmt() converts to the cashier display currency before formatting.
+function fmt(amount) {
+  const cashCur    = baseCur();
+  const globalBase = window.Currency ? window.Currency.base : 'SYP';
+  // Convert from globalBase → cashierCurrency if they differ
+  const val = (window.Currency && cashCur !== globalBase)
+    ? window.Currency.convert(Number(amount) || 0, globalBase, cashCur)
+    : (Number(amount) || 0);
+  const digits = window.Currency ? window.Currency.digits(cashCur) : (cashCur === 'USD' ? 2 : 0);
+  const sym    = window.Currency ? window.Currency.symbol(cashCur) : (cashCur === 'USD' ? '$' : 'ل.س');
+  return val.toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+}
+function baseCur() {
+  return (window._appSettings && window._appSettings.cashierCurrency)
+      || (window.Currency ? window.Currency.base : 'SYP');
+}
+// Currency the customer is actually paying in (may differ from cashier display currency)
+function payCur() { return paymentCurrency || baseCur(); }
+
+// Format amount (stored in window.Currency.base) for payment display in payCur()
+// Format payment method label with currency name, e.g. "نقد · ليرة سورية"
+const _CUR_NAMES = { SYP: 'ليرة سورية', USD: 'دولار أمريكي', TRY: 'ليرة تركية' };
+function fmtMethodCur(sale) {
+  const m = sale.method || '—';
+  const c = sale.paymentCurrency;
+  return c ? m + ' · ' + (_CUR_NAMES[c] || c) : m;
+}
+
+// Frozen historical total of a past sale, shown in the currency it was charged
+// in. A completed sale must NOT change value when the exchange rate changes
+// later, so we display the snapshot (`paymentAmount` + `paymentCurrency`) saved
+// at sale time. Older sales without a snapshot fall back to a live conversion.
+function fmtSaleTotal(sale) {
+  if (sale && sale.paymentAmount != null && sale.paymentCurrency) {
+    const cur = sale.paymentCurrency;
+    const d   = window.Currency ? window.Currency.digits(cur) : (cur === 'USD' ? 2 : 0);
+    const sym = window.Currency ? window.Currency.symbol(cur) : (cur === 'USD' ? '$' : 'ل.س');
+    return (Number(sale.paymentAmount) || 0)
+      .toLocaleString('ar-SY', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + sym;
+  }
+  return fmt(sale ? sale.total : 0);
+}
+
+function fmtPay(amount) {
+  const to         = payCur();
+  const globalBase = window.Currency ? window.Currency.base : 'SYP';
+  const val = (window.Currency && to !== globalBase)
+    ? window.Currency.convert(Number(amount) || 0, globalBase, to)
+    : (Number(amount) || 0);
+  const digits = window.Currency ? window.Currency.digits(to) : (to === 'USD' ? 2 : 0);
+  const sym    = window.Currency ? window.Currency.symbol(to) : (to === 'USD' ? '$' : 'ل.س');
+  return val.toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+}
+
+// Grand total as a raw number in payCur()
+function grandInPayCur() {
+  const t    = computeTotals();
+  const from = window.Currency ? window.Currency.base : 'SYP';
+  const to   = payCur();
+  return (window.Currency && from !== to)
+    ? window.Currency.convert(t.grand, from, to)
+    : t.grand;
+}
+
+// Sync the toggle button highlight to the current payCur() without changing paymentCurrency
+function _initPayCurUI() {
+  document.querySelectorAll('.pay-cur-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('pc-' + payCur().toLowerCase());
+  if (btn) btn.classList.add('active');
+}
+
+function selectPayCurrency(cur) {
+  paymentCurrency = cur;
+  document.querySelectorAll('.pay-cur-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('pc-' + cur.toLowerCase());
+  if (btn) btn.classList.add('active');
+  const cashEl = document.getElementById('cash-received');
+  if (cashEl) {
+    cashEl.placeholder = cur === 'USD' ? 'المبلغ المستلم بالدولار...' : 'المبلغ المستلم بالليرة...';
+    cashEl.value = '';
+  }
+  recalculate();
+}
+
+// ============================================================
+//  LOGIN / LOCK SCREEN
+// ============================================================
+function getEmployees() { return _loadAcct('employees', []) || []; }
+function getLeaves() { return _loadAcct('leaves', []) || []; }
+
+// Returns the active approved leave for an employee if "today" falls within it,
+// otherwise null. Used to block cashier login while an employee is on leave.
+function empActiveLeave(emp) {
+  if (!emp) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const toTs = (v) => {
+    if (!v) return NaN;
+    const d = new Date(String(v).replace(/\//g, '-'));
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const t = today.getTime();
+  return getLeaves().find(lv => {
+    if (lv.status !== 'approved') return false;
+    const sameEmp = (lv.empId && lv.empId === emp.id) ||
+      (lv.empName && emp.name && lv.empName === emp.name);
+    if (!sameEmp) return false;
+    const from = toTs(lv.from), to = toTs(lv.to);
+    if (isNaN(from)) return false;
+    return t >= from && (isNaN(to) ? true : t <= to);
+  }) || null;
+}
+
+// While a cashier session is active, an approved leave that becomes effective
+// must immediately end that session — the employee can no longer use the
+// register. Returns true if the active cashier was kicked out.
+function enforceLeaveGuard() {
+  if (!posCashier || !posCashier.username) return false;
+  const emp = getEmployees().find(e =>
+    (e.username || '').toLowerCase() === String(posCashier.username).toLowerCase());
+  // Account suspended OR currently on approved leave → force out.
+  const onLeave = emp ? empActiveLeave(emp) : null;
+  const suspended = emp && emp.active === false;
+  if (!onLeave && !suspended) return false;
+  const name = (emp && emp.name) || (posCashier && posCashier.name) || 'الموظف';
+  posLogout();
+  const err = document.getElementById('login-error');
+  if (err) {
+    err.textContent = suspended
+      ? `🚫 تم إيقاف حساب ${name} — لا يمكن تسجيل الدخول الآن`
+      : `🏖️ ${name} في إجازة حتى ${onLeave.to || onLeave.from} — لا يمكن تسجيل الدخول الآن`;
+    err.style.display = 'block';
+  }
+  showToast('warning', suspended
+    ? `🚫 ${name} موقوف — تم إنهاء الجلسة`
+    : `🏖️ ${name} في إجازة — تم إنهاء الجلسة`);
+  return true;
+}
+
+function ownerIdentity() {
+  let u = {};
+  try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
+  return u;
+}
+function ownerPin() {
+  const u = ownerIdentity();
+  return (u.uid && localStorage.getItem('a3mali_pin_' + u.uid)) || u.pin || null;
+}
+
+function renderLockChips() {
+  const wrap = document.getElementById('login-chips');
+  const emps = getEmployees().filter(e => e.active !== false);
+  if (!emps.length) {
+    wrap.innerHTML = '<div style="font-size:var(--text-xs);color:var(--text-muted);text-align:center;">لا يوجد موظفون بعد — أضِف موظفين من لوحة التحكم ← الموظفون.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div style="width:100%;font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">الموظفون:</div>' +
+    emps.map(e => {
+      const onLeave = empActiveLeave(e);
+      if (onLeave) {
+        return `<button type="button" class="pos-chip" disabled title="في إجازة حتى ${onLeave.to || onLeave.from}" style="opacity:.5;cursor:not-allowed;">
+          <span class="pos-chip-av" style="background:${e.color||'#3b82f6'}">${(e.name||'م').charAt(0)}</span>${e.name} <span style="font-size:10px;">🏖️ في إجازة</span>
+        </button>`;
+      }
+      return `<button type="button" class="pos-chip" onclick="pickEmployee('${e.username}')">
+        <span class="pos-chip-av" style="background:${e.color||'#3b82f6'}">${(e.name||'م').charAt(0)}</span>${e.name}
+      </button>`;
+    }).join('');
+}
+function pickEmployee(username) {
+  document.getElementById('login-username').value = username;
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-password').focus();
+}
+
+function startSession(cashier) {
+  posCashier = cashier;
+  sessionStartTime = Date.now();
+  sessionSales = [];
+  sessionTotal = 0;
+  sessionStorage.setItem('a3mali_pos_cashier', JSON.stringify(cashier));
+  recordEmployeeLogin(cashier.username);
+  document.getElementById('pos-lock').style.display = 'none';
+  document.getElementById('pos-shell').style.display = 'grid';
+  initPOS();
+  showToast('success', `أهلاً ${cashier.name} 👋`);
+}
+
+// Stamp the matched employee record with last login time + count (account-scoped).
+function recordEmployeeLogin(username) {
+  if (!username) return;
+  const emps = _loadAcct('employees', []) || [];
+  const emp = emps.find(e => (e.username||'').toLowerCase() === String(username).toLowerCase());
+  if (!emp) return;
+  emp.lastLogin = new Date().toISOString();
+  emp.loginCount = (Number(emp.loginCount) || 0) + 1;
+  emp.updatedAt = Date.now();          // so this stamp wins the merge on the dashboard
+  _saveAcct('employees', emps);
+  _fsSync('employees', emps);           // push login stamp to Firebase too
+}
+
+function posLogin() {
+  const u = (document.getElementById('login-username').value || '').trim();
+  const p = (document.getElementById('login-password').value || '').trim();
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  if (!u || !p) { err.textContent = 'أدخل اسم المستخدم وكلمة المرور'; err.style.display = 'block'; return; }
+
+  // 1) Employee credentials
+  const emp = getEmployees().find(e => (e.username||'').toLowerCase() === u.toLowerCase() && String(e.password) === p);
+  if (emp) {
+    if (emp.active === false) {
+      err.textContent = '🚫 تم إيقاف حسابك مؤقتاً من قبل المدير، تواصل معه لمزيد من المعلومات';
+      err.style.display = 'block';
+      document.getElementById('login-password').value = '';
+      return;
+    }
+    const onLeave = empActiveLeave(emp);
+    if (onLeave) {
+      err.textContent = `🏖️ أنت في إجازة حالياً حتى ${onLeave.to || onLeave.from} — لا يمكنك تسجيل الدخول`;
+      err.style.display = 'block';
+      document.getElementById('login-password').value = '';
+      return;
+    }
+    startSession({ name: emp.name, username: emp.username, role: emp.role || 'cashier' }); return;
+  }
+
+  err.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة';
+  err.style.display = 'block';
+  document.getElementById('login-password').value = '';
+}
+
+function posLogout() {
+  sessionStorage.removeItem('a3mali_pos_cashier');
+  posCashier = null;
+  sessionStartTime = null;
+  sessionSales = [];
+  sessionTotal = 0;
+  document.getElementById('pos-shell').style.display = 'none';
+  document.getElementById('pos-lock').style.display = 'flex';
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  renderLockChips();
+}
+
+// ============================================================
+//  POS INIT
+// ============================================================
+function initPOS() {
+  // Cashier identity
+  document.getElementById('cashier-name').textContent = posCashier.name;
+  document.getElementById('pos-avatar').textContent = (posCashier.name || 'م').charAt(0);
+
+  // Settings (tax + shop name)
+  VAT = Number(window._appSettings && window._appSettings.vatRate) || 0;
+
+  // Load data from the system (account-scoped, shared with dashboard)
+  products = (_loadAcct('products', []) || []).map(normalizeProduct);
+  filteredProducts = [...products];
+  customers = _loadAcct('customers', []) || [];
+
+  renderCategories();
+  renderProducts();
+  updateSessionBar();
+  updateInvoiceNumber();
+  selectPayment('cash');
+
+  // Tax row label
+  if (VAT > 0) {
+    document.getElementById('tax-label').textContent = `ضريبة (${VAT}%)`;
+  }
+
+  // Highlight the default payment currency button
+  _initPayCurUI();
+}
+
+function normalizeProduct(p) {
+  // Each product stores prices in its OWN currency (SYP/USD). Convert to the
+  // cashier's base currency so cart math + display stay consistent.
+  const cur  = p.currency || 'SYP';
+  const base = window.Currency ? window.Currency.base : 'SYP';
+  const toBase = (v) => window.Currency ? window.Currency.convert(Number(v)||0, cur, base) : (Number(v)||0);
+  return {
+    id:    p.id || ('PRD-' + Math.random().toString(36).slice(2,8)),
+    name:  p.name || 'منتج',
+    price: toBase(p.price),
+    cost:  toBase(p.cost),
+    origCurrency: cur,
+    origPrice: Number(p.price) || 0,
+    stock: (p.stock === undefined || p.stock === null) ? null : Number(p.stock),
+    sku:   p.sku || '',
+    cat:   p.cat || p.category || 'other',
+    emoji: p.emoji || CAT_ICONS[p.cat || p.category || 'other'] || '📦',
+    active: p.active !== false,
+  };
+}
+
+// Re-sync products & stock from the shared store (after the dashboard edits
+// inventory, sells, or changes the exchange rate in another tab).
+function reloadProducts() {
+  if (!posCashier) return;              // only meaningful once a cashier is in
+  products = (_loadAcct('products', []) || []).map(normalizeProduct);
+  cart = cart.filter(ci => products.some(p => p.id === ci.id)); // drop deleted items
+  renderCategories();
+  const searchEl = document.getElementById('product-search');
+  searchProducts(searchEl ? searchEl.value : '');
+  renderCart();
+}
+
+// Manual sync triggered by the 🔄 button in the header.
+function syncNow(btn) {
+  if (!posCashier) return;
+  // Animate button
+  if (btn) { btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.5s ease'; }
+  setTimeout(() => { if (btn) { btn.style.transform = ''; btn.style.transition = ''; } }, 600);
+  // Show syncing state on pill
+  setSyncState('syncing', 0);
+  // Reload products + customers from localStorage
+  const prevCount = products.length;
+  products  = (_loadAcct('products',  []) || []).map(normalizeProduct);
+  customers = _loadAcct('customers', []) || [];
+  cart = cart.filter(ci => products.some(p => p.id === ci.id));
+  renderCategories();
+  const searchEl = document.getElementById('product-search');
+  searchProducts(searchEl ? searchEl.value : '');
+  renderCart();
+  // Report result
+  const newCount = products.length;
+  const diff = newCount - prevCount;
+  setSyncState('online', 0);
+  if (diff > 0)       showToast('success', `✅ تمت المزامنة — تم إضافة ${diff} منتج جديد`);
+  else if (diff < 0)  showToast('info',    `ℹ️ تمت المزامنة — تم حذف ${Math.abs(diff)} منتج`);
+  else                showToast('success',  '✅ تمت المزامنة — كل شيء محدّث');
+}
+
+// ============================================================
+//  PRODUCTS
+// ============================================================
+function renderCategories() {
+  const cats = Array.from(new Set(products.map(p => p.cat))).filter(Boolean);
+  const bar = document.getElementById('categories');
+  let html = `<button class="cat-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all',this)">
+      <span class="cat-btn-icon">🏷️</span> الكل</button>`;
+  cats.forEach(c => {
+    html += `<button class="cat-btn ${activeCategory===c?'active':''}" onclick="filterCategory('${c}',this)">
+      <span class="cat-btn-icon">${CAT_ICONS[c]||'📦'}</span> ${CAT_LABELS[c]||c}</button>`;
+  });
+  bar.innerHTML = html;
+  bar.style.display = cats.length > 1 ? '' : 'none';
+}
+
+function cartQty(productId) {
+  const it = cart.find(i => i.id === productId);
+  return it ? it.qty : 0;
+}
+
+function renderProducts() {
+  const grid = document.getElementById('products-grid');
+  if (!products.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      <div class="empty-icon">📦</div>
+      <div class="empty-title">لا توجد منتجات في النظام</div>
+      <div class="empty-desc">أضِف منتجات من لوحة التحكم ← المخزون لتظهر هنا</div>
+      <a href="dashboard.html#inventory" class="btn btn-primary" style="margin-top:var(--sp-4);">+ إدارة المخزون</a>
+    </div>`;
+    return;
+  }
+  if (!filteredProducts.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🔍</div><div class="empty-title">لا توجد نتائج</div></div>`;
+    return;
+  }
+  grid.innerHTML = filteredProducts.map(p => {
+    const tracked   = p.stock !== null;
+    const remaining = tracked ? (p.stock - cartQty(p.id)) : null;
+    const out = tracked && remaining <= 0;
+    const low = tracked && remaining > 0 && remaining <= 10;
+    const disabled = !p.active || out;
+    // Availability badge shown ABOVE every product: available / out + quantity.
+    let availBadge;
+    if (!p.active) {
+      availBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--text-muted);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">غير متوفر</span>`;
+    } else if (out) {
+      availBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--danger);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">● نفذ</span>`;
+    } else if (!tracked) {
+      availBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--success,#16a34a);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">● متوفر</span>`;
+    } else {
+      const bg = low ? 'var(--warning)' : 'var(--success,#16a34a)';
+      availBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:${bg};color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">● متوفر · ${remaining}</span>`;
+    }
+    return `
+    <div class="pos-product" onclick="addToCart('${p.id}')" ${disabled ? 'style="opacity:.5;pointer-events:none;"' : ''}>
+      <div style="padding:6px 8px 0;text-align:center;">${availBadge}</div>
+      <div class="pos-product-img">
+        <span>${p.emoji}</span>
+      </div>
+      <div class="pos-product-body">
+        <div class="pos-product-name">${p.name}</div>
+        <div class="pos-product-unit" style="font-size:10px;color:var(--text-muted);">${p.sku || '—'}</div>
+        <div class="pos-product-price">${fmt(p.price)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchProducts(q) {
+  q = (q||'').toLowerCase().trim();
+  const base = activeCategory === 'all' ? products : products.filter(p => p.cat === activeCategory);
+  filteredProducts = !q ? [...base] : base.filter(p =>
+    (p.name||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q));
+  renderProducts();
+}
+
+function filterCategory(cat, btn) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const q = document.getElementById('product-search').value;
+  searchProducts(q);
+}
+
+// ============================================================
+//  CART
+// ============================================================
+function addToCart(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  if (!product.active) { showToast('warning', `${product.name} غير متوفر حالياً`); return; }
+  const existing = cart.find(i => i.id === productId);
+  if (product.stock !== null && (existing ? existing.qty : 0) >= product.stock) {
+    showToast('warning', `الكمية المتاحة: ${product.stock} فقط`);
+    return;
+  }
+  if (existing) existing.qty++;
+  else cart.push({ id:product.id, name:product.name, price:product.price, emoji:product.emoji, qty:1 });
+
+  const el = document.querySelector(`[onclick="addToCart('${productId}')"]`);
+  if (el) { el.style.transform = 'scale(.95)'; setTimeout(() => el.style.transform = '', 150); }
+
+  renderCart();
+  renderProducts();
+}
+
+function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); renderCart(); renderProducts(); }
+function updateQty(productId, delta) {
+  const item = cart.find(i => i.id === productId);
+  if (!item) return;
+  const product = products.find(p => p.id === productId);
+  if (delta > 0 && product && product.stock !== null && item.qty >= product.stock) {
+    showToast('warning', `الكمية المتاحة: ${product.stock} فقط`); return;
+  }
+  item.qty += delta;
+  if (item.qty <= 0) removeFromCart(productId);
+  else { renderCart(); renderProducts(); }
+}
+function clearCart() {
+  if (!cart.length) return;
+  if (!confirm('هل تريد مسح الفاتورة الحالية؟')) return;
+  newSale();
+}
+
+// ============================================================
+//  SERVICE (خدمة) — no stock, no cost, 100% profit
+// ============================================================
+function selectSvcCur(cur) {
+  _svcCurrency = cur;
+  document.getElementById('svc-cur-syp').classList.toggle('active', cur === 'SYP');
+  document.getElementById('svc-cur-usd').classList.toggle('active', cur === 'USD');
+}
+
+function openServiceModal() {
+  document.getElementById('svc-name').value  = '';
+  document.getElementById('svc-price').value = '';
+  document.getElementById('svc-notes').value = '';
+  _svcCurrency = 'SYP';
+  selectSvcCur('SYP');
+  openModal('service-modal');
+  setTimeout(() => document.getElementById('svc-name').focus(), 100);
+}
+
+function addService() {
+  const name  = (document.getElementById('svc-name').value  || '').trim();
+  const price = parseFloat(document.getElementById('svc-price').value) || 0;
+  const notes = (document.getElementById('svc-notes').value || '').trim();
+  if (!name)    { showToast('error', 'أدخل اسم الخدمة'); return; }
+  if (price <= 0) { showToast('error', 'أدخل سعر الخدمة'); return; }
+
+  // Convert service price to cashier base currency for cart total
+  const baseCurrency = baseCur();
+  const priceInBase  = (window.Currency && _svcCurrency !== baseCurrency)
+    ? window.Currency.convert(price, _svcCurrency, baseCurrency)
+    : price;
+
+  const svcId = 'svc-' + Date.now();
+  cart.push({
+    id:                   svcId,
+    name:                 name,
+    price:                priceInBase,        // stored in base currency for totals
+    servicePriceDisplay:  price,              // original amount shown in receipt
+    serviceCurrency:      _svcCurrency,       // original currency
+    emoji:                '⚙️',
+    qty:                  1,
+    type:                 'service',
+    cost:                 0,
+    notes:                notes,
+  });
+
+  closeModal('service-modal');
+  renderCart();
+  showToast('success', `✅ تمت إضافة «${name}»`);
+}
+
+// ── Live stock verification via Firestore ──
+async function _verifyStockLive() {
+  if (!window._fsGet) return true;   // offline — skip live check
+  const productItems = cart.filter(i => i.type !== 'service');
+  if (!productItems.length) return true;
+
+  const overlay = document.getElementById('stock-check-overlay');
+  if (overlay) overlay.classList.add('visible');
+  const t0 = Date.now();
+
+  try {
+    const acctKey = _acctKey ? _acctKey() : null;
+    if (!acctKey) return true;
+    const snap = await window._fsGet(`accounts/${acctKey}/data/products`);
+    const liveProds = snap.exists() ? (snap.data().items || snap.data().data || []) : null;
+    if (!liveProds) return true;
+
+    for (const ci of productItems) {
+      const lp = liveProds.find(p => p.id === ci.id);
+      if (!lp) continue;
+      if (lp.stock !== null && lp.stock !== undefined && ci.qty > lp.stock) {
+        const elapsed = Date.now() - t0;
+        if (elapsed < 500) await new Promise(r => setTimeout(r, 500 - elapsed));
+        if (overlay) overlay.classList.remove('visible');
+        showToast('error', `❌ المخزون الفعلي لـ«${ci.name}» (${lp.stock}) أقل من الكمية المطلوبة (${ci.qty})`);
+        return false;
+      }
+      // Update local cache with live stock value
+      const localProd = products.find(p => p.id === ci.id);
+      if (localProd) localProd.stock = lp.stock;
+    }
+    return true;
+  } catch(e) {
+    console.warn('live stock check failed', e);
+    return true;   // on error, allow sale to proceed
+  } finally {
+    const elapsed = Date.now() - t0;
+    if (elapsed < 500) await new Promise(r => setTimeout(r, 500 - elapsed));
+    if (overlay) overlay.classList.remove('visible');
+  }
+}
+
+function renderCart() {
+  const container = document.getElementById('cart-items');
+  const countEl   = document.getElementById('cart-count');
+  countEl.textContent = cart.reduce((s, i) => s + i.qty, 0);
+
+  if (!cart.length) {
+    container.innerHTML = `
+      <div class="cart-empty" id="cart-empty">
+        <div class="cart-empty-icon">🛒</div>
+        <div class="cart-empty-text">اضغط على منتج لإضافته</div>
+      </div>`;
+    document.getElementById('checkout-btn').disabled = true;
+    recalculate();
+    return;
+  }
+  document.getElementById('checkout-btn').disabled = false;
+  container.innerHTML = cart.map(item => {
+    const isSvc = item.type === 'service';
+    // For services: show original-currency label if it differs from base
+    const svcLabel = isSvc && item.serviceCurrency && item.servicePriceDisplay != null
+      ? (() => {
+          const sym = item.serviceCurrency === 'USD' ? '$' : 'ل.س';
+          const digits = item.serviceCurrency === 'USD' ? 2 : 0;
+          const orig = Number(item.servicePriceDisplay).toLocaleString('ar-SY', {minimumFractionDigits:digits, maximumFractionDigits:digits});
+          return `<div class="svc-cur-label">${orig} ${sym}</div>`;
+        })()
+      : '';
+    return `
+    <div class="cart-item${isSvc ? ' is-service' : ''}" id="ci-${item.id}">
+      <span class="cart-item-emoji">${item.emoji || (isSvc ? '⚙️' : '📦')}</span>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${isSvc ? `<span class="svc-badge">خدمة</span>` : ''}${item.name}</div>
+        <div class="cart-item-price">${fmt(item.price)} × ${item.qty}${svcLabel}</div>
+      </div>
+      <div class="cart-item-controls">
+        <button class="qty-btn" onclick="updateQty('${item.id}',-1)">−</button>
+        <span class="qty-value">${item.qty}</span>
+        <button class="qty-btn" onclick="updateQty('${item.id}',1)">+</button>
+      </div>
+      <span class="cart-item-total">${fmt(item.price * item.qty)}</span>
+      <span class="cart-item-remove" onclick="updateQty('${item.id}',-1)">✕</span>
+    </div>`;
+  }).join('');
+  recalculate();
+}
+
+// ============================================================
+//  TOTALS
+// ============================================================
+function computeTotals() {
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const dVal  = parseFloat(document.getElementById('discount-val').value) || 0;
+  const dType = document.getElementById('discount-type').value;
+  let discount = 0;
+  if (dVal > 0) discount = dType === 'percent' ? subtotal * (dVal/100) : dVal;
+  const afterDiscount = Math.max(0, subtotal - discount);
+  const tax = afterDiscount * (VAT/100);
+  const grand = afterDiscount + tax;
+  return { subtotal, discount, tax, grand };
+}
+
+function recalculate() {
+  const t = computeTotals();
+  document.getElementById('subtotal').textContent = fmt(t.subtotal);
+  document.getElementById('grand-total').textContent = fmtPay(t.grand);
+  document.getElementById('checkout-label').textContent = cart.length ? `إتمام البيع — ${fmtPay(t.grand)}` : 'إتمام البيع';
+
+  const discountRow = document.getElementById('discount-row');
+  if (t.discount > 0) {
+    discountRow.style.display = 'flex';
+    document.getElementById('discount-display').textContent = `- ${fmt(t.discount)}`;
+  } else discountRow.style.display = 'none';
+
+  const taxRow = document.getElementById('tax-row');
+  if (VAT > 0 && t.tax > 0) {
+    taxRow.style.display = 'flex';
+    document.getElementById('tax-display').textContent = fmt(t.tax);
+  } else taxRow.style.display = 'none';
+
+  calcChange();
+  updateMobileCartBar(t);
+}
+
+// ============================================================
+//  MOBILE CART SHEET (bottom-sheet on phones)
+// ============================================================
+function updateMobileCartBar(t) {
+  const bar = document.getElementById('mobile-cart-bar');
+  if (!bar) return;
+  t = t || computeTotals();
+  const count = cart.reduce((s, i) => s + i.qty, 0);
+  const cEl = document.getElementById('mcb-count');
+  const tEl = document.getElementById('mcb-total');
+  if (cEl) cEl.textContent = count;
+  if (tEl) tEl.textContent = fmtPay(t.grand);
+  bar.classList.toggle('has-items', count > 0);
+}
+
+function openMobileCart() {
+  const shell = document.getElementById('pos-shell');
+  if (shell) shell.classList.add('cart-open');
+  const bd = document.getElementById('mobile-cart-backdrop');
+  if (bd) bd.classList.add('show');
+}
+
+function closeMobileCart() {
+  const shell = document.getElementById('pos-shell');
+  if (shell) shell.classList.remove('cart-open');
+  const bd = document.getElementById('mobile-cart-backdrop');
+  if (bd) bd.classList.remove('show');
+}
+
+function calcChange() {
+  const cur      = payCur();
+  const digits   = cur === 'USD' ? 2 : 0;
+  const factor   = Math.pow(10, digits);
+  // Round both to the payment-currency precision so floating-point conversion
+  // noise (e.g. a stored price of 10125.0001) doesn't show a fake shortfall.
+  const grand    = Math.round(grandInPayCur() * factor) / factor;
+  const received = Math.round((parseFloat(document.getElementById('cash-received').value) || 0) * factor) / factor;
+  const change   = received - grand;
+  const sym      = window.Currency ? window.Currency.symbol(cur) : (cur === 'USD' ? '$' : 'ل.س');
+  const str      = Math.abs(change).toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+  const el       = document.getElementById('change-display');
+  el.textContent = change >= 0 && received > 0 ? str : '—';
+  el.style.color = change >= 0 ? 'var(--success)' : 'var(--danger)';
+}
+
+function setExactCash() {
+  const grand = grandInPayCur();
+  if (grand <= 0) return;
+  const digits = payCur() === 'USD' ? 2 : 0;
+  document.getElementById('cash-received').value = parseFloat(grand.toFixed(digits));
+  calcChange();
+}
+
+// ============================================================
+//  PAYMENT
+// ============================================================
+const PAY_META = {
+  cash:     { icon: '💵', label: 'نقد' },
+  card:     { icon: '💳', label: 'بطاقة' },
+  transfer: { icon: '🏦', label: 'تحويل' },
+  credit:   { icon: '📋', label: 'دين' },
+};
+
+function togglePayMenu(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('pay-select')?.classList.toggle('open');
+}
+
+function selectPayment(method) {
+  selectedPayment = method;
+  document.querySelectorAll('.pay-method').forEach(el => el.classList.remove('selected'));
+  const btn = document.getElementById(`pm-${method}`);
+  if (btn) btn.classList.add('selected');
+
+  // Reflect the choice on the collapsed trigger, then close the menu
+  const meta = PAY_META[method] || PAY_META.cash;
+  const iconEl  = document.getElementById('pay-current-icon');
+  const labelEl = document.getElementById('pay-current-label');
+  if (iconEl)  iconEl.textContent  = meta.icon;
+  if (labelEl) labelEl.textContent = meta.label;
+  const trig = document.getElementById('pay-select-trigger');
+  if (trig) trig.style.color = method === 'credit' ? 'var(--danger,#ef4444)' : '';
+  document.getElementById('pay-select')?.classList.remove('open');
+
+  document.getElementById('cash-input-wrap').style.display = method === 'cash' ? 'flex' : 'none';
+  const warn = document.getElementById('credit-customer-warning');
+  if (warn) warn.style.display = (method === 'credit' && !selectedCustomer) ? 'block' : 'none';
+}
+
+// Close the payment menu when clicking anywhere outside it
+document.addEventListener('click', (e) => {
+  const sel = document.getElementById('pay-select');
+  if (sel && !sel.contains(e.target)) sel.classList.remove('open');
+});
+
+// ============================================================
+//  CART VALIDATION (run before every sale)
+//  Confirms each line still exists, the qty is valid and within
+//  stock, and the price matches the current product price.
+// ============================================================
+function validateCart() {
+  if (!cart.length) return false;
+  let priceChanged = false;
+  for (let idx = cart.length - 1; idx >= 0; idx--) {
+    const item = cart[idx];
+
+    // Services have no product record — skip catalog checks
+    if (item.type === 'service') continue;
+
+    const prod = products.find(p => p.id === item.id);
+
+    // 1) Product no longer exists in the catalog
+    if (!prod) {
+      cart.splice(idx, 1);
+      renderCart(); renderProducts();
+      showToast('error', `❌ المنتج «${item.name}» لم يعد موجوداً — تمت إزالته من السلة`);
+      return false;
+    }
+
+    // 2) Quantity must be a positive integer
+    const qty = Number(item.qty);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      showToast('error', `❌ كمية «${item.name}» غير صحيحة (${item.qty})`);
+      return false;
+    }
+
+    // 3) Quantity must not exceed available stock
+    if (prod.stock !== null && qty > prod.stock) {
+      item.qty = prod.stock > 0 ? prod.stock : 1;
+      renderCart(); renderProducts();
+      showToast('error', `❌ الكمية المطلوبة من «${item.name}» (${qty}) أكبر من المتوفر (${prod.stock})`);
+      return false;
+    }
+
+    // 4) Price must be valid and match the current product price
+    if (!(Number(prod.price) > 0)) {
+      showToast('error', `❌ سعر «${item.name}» غير صالح — راجع المنتج`);
+      return false;
+    }
+    if (Number(item.price) !== Number(prod.price)) {
+      item.price = Number(prod.price);
+      priceChanged = true;
+    }
+  }
+
+  // If any price was corrected, refresh totals and let the user re-confirm
+  if (priceChanged) {
+    renderCart(); renderProducts(); recalculate();
+    showToast('warning', '⚠️ تم تحديث أسعار بعض المنتجات — راجع الإجمالي ثم أعد إتمام البيع');
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+//  CHECKOUT (offline-first + Firebase queue)
+// ============================================================
+async function checkout() {
+  if (!cart.length) return;
+  if (!validateCart()) return;
+  // Live Firestore stock verification (skips services automatically)
+  const stockOk = await _verifyStockLive();
+  if (!stockOk) return;
+  const t = computeTotals();
+
+  // Credit sale requires a customer
+  if (selectedPayment === 'credit') {
+    if (!selectedCustomer) {
+      showToast('error', 'البيع بالدين يتطلب تحديد العميل أولاً');
+      const warn = document.getElementById('credit-customer-warning');
+      if (warn) warn.style.display = 'block';
+      return;
+    }
+  }
+
+  const grandPay = grandInPayCur();   // grand total in customer's payment currency
+
+  if (selectedPayment === 'cash') {
+    const cashEl   = document.getElementById('cash-received');
+    const received = parseFloat(cashEl.value) || 0;
+    const digits   = payCur() === 'USD' ? 2 : 0;
+    const factor   = Math.pow(10, digits);
+    // Round both to payment-currency precision so floating-point conversion
+    // noise (e.g. a stored price of 10125.0001) doesn't fake a shortfall.
+    const grandR   = Math.round(grandPay * factor) / factor;
+    const recvR    = Math.round(received * factor) / factor;
+    if (!cashEl.value.trim() || received === 0) {
+      showToast('error', 'الرجاء إدخال مبلغ المستلم');
+      cashEl.focus(); return;
+    } else if (recvR < grandR - 1e-9) {
+      showToast('error', `المبلغ المستلم أقل من الإجمالي (${fmtPay(t.grand)})`);
+      cashEl.focus(); return;
+    }
+  }
+
+  const received = selectedPayment === 'cash' ? (parseFloat(document.getElementById('cash-received').value) || grandPay) : grandPay;
+  const change   = selectedPayment === 'cash' ? Math.max(0, received - grandPay) : 0;
+  const methodMap = { cash:'نقد', card:'POS / بطاقة', transfer:'تحويل بنكي', credit:'بيع بالدين' };
+  const now = new Date();
+  const invId = nextInvoiceId();
+  const isCredit = selectedPayment === 'credit';
+
+  const sale = {
+    id: invId,
+    client: selectedCustomer ? selectedCustomer.name : 'عميل نقدي',
+    customer: selectedCustomer,
+    items: cart.map(i => {
+      if (i.type === 'service') {
+        return {
+          id:                   i.id,
+          name:                 i.name,
+          price:                i.price,
+          qty:                  i.qty,
+          total:                i.price * i.qty,
+          cost:                 0,
+          type:                 'service',
+          serviceCurrency:      i.serviceCurrency || baseCur(),
+          servicePriceDisplay:  i.servicePriceDisplay,
+          notes:                i.notes || '',
+          emoji:                '⚙️',
+        };
+      }
+      const sp = products.find(p => p.id === i.id);   // cost is already normalized to base currency
+      return { id:i.id, name:i.name, price:i.price, qty:i.qty, total:i.price*i.qty,
+               cost: sp ? (Number(sp.cost) || 0) : 0 };
+    }),
+    subtotal: t.subtotal,
+    discount: t.discount,
+    tax: t.tax,
+    amount: t.grand,
+    total: t.grand,
+    currency: baseCur(),
+    payment: selectedPayment,
+    method: methodMap[selectedPayment] || selectedPayment,
+    paymentCurrency: payCur(),
+    // ── Frozen FX snapshot ──
+    // A completed sale's value must NOT change when the exchange rate changes
+    // later. `paymentAmount` is the exact grand total in the payment currency at
+    // sale time; the fx* fields capture the rate context at that moment so any
+    // other-currency view of this invoice can be reconstructed without drift.
+    paymentAmount: grandPay,
+    fxRate:     (window.Currency && window.Currency.rate)     || 0,
+    fxUsdToTry: (window.Currency && window.Currency.usdToTry) || 0,
+    fxBase:     (window.Currency && window.Currency.base)     || 'SYP',
+    paid: isCredit ? 0 : received,
+    change: isCredit ? 0 : change,
+    status: isCredit ? 'credit' : 'paid',
+    paymentType: isCredit ? 'credit' : 'cash',
+    source: 'pos',
+    cashier: posCashier ? posCashier.name : '—',
+    cashierUser: posCashier ? posCashier.username : '',
+    employeeId: posCashier ? posCashier.username : null,
+    employeeName: posCashier ? posCashier.name : '—',
+    notes: document.getElementById('order-notes').value || '',
+    date: `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`,
+    timestamp: now.toISOString(),
+    createdAt: now.toISOString(),
+  };
+
+  // 1) Persist locally (so dashboard sales include POS sales via the shared
+  // localStorage cache). Firestore sync for this invoice happens per-document
+  // via OfflineDB.enqueue() below (step 3) — NOT a whole-array _fsSync — since
+  // overwriting the entire invoices array here previously caused a real
+  // data-loss bug whenever this tab's cache was stale relative to Firestore.
+  const invoices = _loadAcct('invoices', []) || [];
+  invoices.unshift(sale);
+  _saveAcct('invoices', invoices);
+
+  // 1b) If credit sale, register a debt record in the debts store
+  if (isCredit && selectedCustomer) {
+    const debts = _loadAcct('debts', []) || [];
+    debts.unshift({
+      id: 'DEBT-' + now.getTime().toString().slice(-8),
+      invoiceId: invId,
+      customerId: selectedCustomer.id || '',
+      customerName: selectedCustomer.name || '',
+      amount: t.grand,
+      paid: 0,
+      currency: baseCur(),
+      date: now.getTime(),
+      status: 'pending',
+      notes: sale.notes || '',
+      createdAt: now.getTime(),
+    });
+    _saveAcct('debts', debts);
+    _fsSync('debts', debts);
+  }
+
+  // 2) Decrement stock and persist products (skip services — no stock)
+  const prodStore = _loadAcct('products', []) || [];
+  cart.forEach(ci => {
+    if (ci.type === 'service') return;
+    const sp = prodStore.find(p => p.id === ci.id);
+    if (sp && sp.stock !== undefined && sp.stock !== null) sp.stock = Math.max(0, Number(sp.stock) - ci.qty);
+    const lp = products.find(p => p.id === ci.id);
+    if (lp && lp.stock !== null) lp.stock = Math.max(0, lp.stock - ci.qty);
+  });
+  _saveAcct('products', prodStore);
+  _fsSync('products', prodStore);
+
+  // 2c) Notify low stock after sale (skip services)
+  const _appMin = Number(window._appSettings && window._appSettings.minStockAlert) || 5;
+  cart.forEach(ci => {
+    if (ci.type === 'service') return;
+    const sp  = prodStore.find(p => p.id === ci.id);
+    if (!sp) return;
+    const min = sp.minStock != null ? Number(sp.minStock) : _appMin;
+    const st  = Number(sp.stock) || 0;
+    if (st <= 0)        showToast('warning', `⚠️ ${ci.name} — نفد من المخزون`);
+    else if (st <= min) showToast('warning', `⚠️ ${ci.name} رح ينفذ — الكمية: ${st}`);
+  });
+
+  // 2b) Log POS sale stock movements (skip services — no stock movement)
+  const moves = _loadAcct('stockMoves', []) || [];
+  cart.forEach(ci => {
+    if (ci.type === 'service') return;
+    const sp = prodStore.find(p => p.id === ci.id);
+    moves.unshift({
+      id: 'MOV-' + Date.now().toString().slice(-8) + '-' + ci.id,
+      productId: ci.id,
+      productName: ci.name,
+      type: 'sale',
+      qty: -Math.abs(ci.qty),
+      balanceAfter: sp ? sp.stock : null,
+      reason: 'بيع — فاتورة ' + invId,
+      user: posCashier ? posCashier.name : '—',
+      timestamp: Date.now(),
+    });
+  });
+  _saveAcct('stockMoves', moves);
+  _fsSync('stockMoves', moves);
+
+  // 3) Queue for Firebase sync (offline-safe)
+  try {
+    if (window.OfflineDB) {
+      window.OfflineDB.enqueue({ type:'INSERT', collection: _fbPath('invoices'), data: { ...sale, account: _acctKey() } });
+    }
+  } catch(e) { console.warn('enqueue failed', e); }
+  refreshSyncPill();
+
+  // 4) Session tracking
+  sessionSales.unshift(sale);
+  sessionTotal += t.grand;
+  updateSessionBar();
+  updateInvoiceNumber();
+
+  showReceipt(sale);
+  newSale();   // امسح السلة وأعد ضبط الإدخالات للبيع التالي
+}
+
+// ============================================================
+//  INVOICE NUMBERING
+// ============================================================
+// Invoice number = fatura-YYMMDD-NNN, with a daily sequence that resets each day.
+//  e.g. fatura-260622-001, fatura-260622-002 ...
+function _invDatePrefix() {
+  const d = new Date();
+  const y   = String(d.getFullYear()).slice(-2);
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+function nextInvoiceId() {
+  const prefix = _invDatePrefix();
+  const key = 'pos_counter_' + prefix;     // per-day counter → resets automatically each day
+  let n = parseInt(_loadAcct(key, 0)) || 0;
+  n++;
+  _saveAcct(key, n);
+  return 'fatura-' + prefix + '-' + String(n).padStart(3, '0');
+}
+function peekInvoiceId() {
+  const prefix = _invDatePrefix();
+  const n = (parseInt(_loadAcct('pos_counter_' + prefix, 0)) || 0) + 1;
+  return 'fatura-' + prefix + '-' + String(n).padStart(3, '0');
+}
+function updateInvoiceNumber() {
+  document.getElementById('invoice-number').textContent = peekInvoiceId();
+}
+
+// ============================================================
+//  RECEIPT
+// ============================================================
+function shopName() {
+  return (window._appSettings && window._appSettings.companyName) || 'أعمالي';
+}
+// Build the printable receipt HTML for one sale (reused by the receipt modal,
+// "print last invoice", and the invoices multi-print).
+function buildReceiptHTML(sale) {
+  const ts = sale.timestamp || sale.createdAt;
+  return `
+    <div class="receipt-header">
+      <div class="receipt-logo">${shopName()}</div>
+      <div class="receipt-sub">${ts ? new Date(ts).toLocaleString('ar-SY') : ''}</div>
+      <div class="receipt-sub">الكاشير: ${sale.cashier || '—'}</div>
+    </div>
+    <div class="receipt-items">
+      <div style="display:flex;justify-content:space-between;font-size:10px;border-bottom:1px dashed #ccc;padding-bottom:4px;margin-bottom:4px;">
+        <span>المنتج</span><span style="display:flex;gap:20px;"><span>الكمية</span><span>الإجمالي</span></span>
+      </div>
+      ${(sale.items || []).map(i => {
+        const isSvc = i.type === 'service';
+        let priceLabel = fmt(i.total);
+        if (isSvc && i.servicePriceDisplay != null && i.serviceCurrency) {
+          const sym    = i.serviceCurrency === 'USD' ? '$' : 'ل.س';
+          const digits = i.serviceCurrency === 'USD' ? 2 : 0;
+          const orig   = Number(i.servicePriceDisplay * i.qty).toLocaleString('ar-SY', {minimumFractionDigits:digits,maximumFractionDigits:digits});
+          priceLabel   = `${orig} ${sym}`;
+        }
+        return `
+        <div class="receipt-item">
+          <span>${isSvc ? '⚙️ ' : ''}${i.name}${isSvc ? ' (خدمة)' : ''}</span>
+          <span style="display:flex;gap:20px;"><span>x${i.qty}</span><span>${priceLabel}</span></span>
+        </div>`;
+      }).join('')}
+    </div>
+    <hr class="receipt-divider" />
+    <div class="receipt-item"><span>المجموع</span><span>${fmt(sale.subtotal)}</span></div>
+    ${sale.discount > 0 ? `<div class="receipt-item"><span>الخصم</span><span>- ${fmt(sale.discount)}</span></div>` : ''}
+    ${sale.tax > 0 ? `<div class="receipt-item"><span>الضريبة</span><span>${fmt(sale.tax)}</span></div>` : ''}
+    <hr class="receipt-divider" />
+    <div class="receipt-total"><span>الإجمالي</span><span>${fmt(sale.total)}</span></div>
+    ${sale.payment === 'cash' ? `
+      <div class="receipt-item" style="margin-top:4px;"><span>المدفوع</span><span>${fmt(sale.paid)}</span></div>
+      <div class="receipt-item"><span>الباقي</span><span>${fmt(sale.change)}</span></div>` : ''}
+    <hr class="receipt-divider" />
+    <div class="receipt-footer">
+      <div>رقم الفاتورة: ${sale.id}</div>
+      <div>${sale.client || '—'}</div>
+      <div>طريقة الدفع: ${fmtMethodCur(sale)}</div>
+      <div style="margin-top:8px;font-size:12px;">شكراً لتسوقكم معنا ❤️</div>
+    </div>`;
+}
+function showReceipt(sale) {
+  document.getElementById('receipt-content').innerHTML = buildReceiptHTML(sale);
+  openModal('receipt-modal');
+}
+// Shared print CSS for receipts.
+const _RECEIPT_PRINT_CSS = `body{font-family:'Courier New',monospace;font-size:12px;direction:rtl;padding:16px;}*{box-sizing:border-box;}
+  .receipt-header{text-align:center;margin-bottom:8px;} .receipt-logo{font-size:18px;font-weight:bold;}
+  .receipt-sub{font-size:11px;color:#555;} .receipt-item{display:flex;justify-content:space-between;margin:2px 0;}
+  .receipt-total{display:flex;justify-content:space-between;font-weight:bold;font-size:14px;}
+  .receipt-divider{border:none;border-top:1px dashed #999;margin:6px 0;} .receipt-footer{text-align:center;margin-top:8px;font-size:11px;}
+  .receipt-page{page-break-after:always;} .receipt-page:last-child{page-break-after:auto;}`;
+// Print one or more sales (each on its own page).
+function printSales(sales) {
+  if (!sales || !sales.length) return;
+  const body = sales.map(s => `<div class="receipt-page">${buildReceiptHTML(s)}</div>`).join('');
+  const win = window.open('', '_blank', 'width=380,height=600');
+  win.document.write(`<html><head><title>طباعة الفواتير<\/title><meta charset="utf-8" />
+    <style>${_RECEIPT_PRINT_CSS}<\/style><\/head><body>${body}<\/body><\/html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+  setTimeout(() => win.close(), 600);
+  showToast('success', sales.length > 1 ? `تم إرسال ${sales.length} فواتير للطباعة ✓` : 'تم إرسال الفاتورة للطباعة ✓');
+}
+
+function newSale() {
+  closeMobileCart();
+  cart = [];
+  selectedCustomer = null;
+  paymentCurrency = null;
+  document.getElementById('selected-customer-name').textContent = 'اختر العميل (اختياري)';
+  document.getElementById('selected-customer-name').classList.remove('selected');
+  document.getElementById('selected-customer-phone').textContent = '';
+  document.getElementById('discount-val').value = '';
+  document.getElementById('cash-received').value = '';
+  document.getElementById('cash-received').placeholder = 'المبلغ المستلم...';
+  document.getElementById('order-notes').value = '';
+  _initPayCurUI();
+  selectPayment('cash');
+  updateInvoiceNumber();
+  renderCart();
+  renderProducts();
+}
+
+function printReceipt() {
+  const content = document.getElementById('receipt-content').innerHTML;
+  const win = window.open('', '_blank', 'width=380,height=600');
+  win.document.write(`<html><head><title>إيصال<\/title><meta charset="utf-8" />
+    <style>body{font-family:'Courier New',monospace;font-size:12px;direction:rtl;padding:16px;}*{box-sizing:border-box;}
+    .receipt-header{text-align:center;margin-bottom:8px;} .receipt-logo{font-size:18px;font-weight:bold;}
+    .receipt-sub{font-size:11px;color:#555;} .receipt-item{display:flex;justify-content:space-between;margin:2px 0;}
+    .receipt-total{display:flex;justify-content:space-between;font-weight:bold;font-size:14px;}
+    .receipt-divider{border:none;border-top:1px dashed #999;margin:6px 0;} .receipt-footer{text-align:center;margin-top:8px;font-size:11px;}
+    <\/style><\/head><body>${content}<\/body><\/html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+  setTimeout(() => win.close(), 600);
+  closeModal('receipt-modal');
+  newSale();
+  showToast('success', 'تم إرسال الإيصال للطباعة ✓');
+}
+
+// ============================================================
+//  CUSTOMERS
+// ============================================================
+function openCustomerSelect() { renderCustomerList(customers); openModal('customer-modal'); }
+function renderCustomerList(list) {
+  const el = document.getElementById('customers-list');
+  if (!list.length) {
+    el.innerHTML = `<div style="padding:var(--sp-8);text-align:center;color:var(--text-muted);">لا يوجد عملاء — أضِف عميلاً جديداً</div>`;
+    return;
+  }
+  el.innerHTML = list.map((c, idx) => `
+    <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-5);border-bottom:1px solid var(--border);cursor:pointer;"
+      onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"
+      onclick="selectCustomerByIndex(${idx})">
+      <div class="avatar avatar-sm" style="background:var(--primary);">${(c.name||'?').charAt(0)}</div>
+      <div>
+        <div style="font-weight:600;font-size:var(--text-sm);">${c.name||'—'}</div>
+        <div style="font-size:var(--text-xs);color:var(--text-muted);" dir="ltr">${c.phone||''}</div>
+      </div>
+    </div>`).join('');
+}
+let _custFiltered = [];
+function filterModalCustomers(q) {
+  q = (q||'').toLowerCase();
+  _custFiltered = customers.filter(c => (c.name||'').toLowerCase().includes(q) || (c.phone||'').includes(q));
+  renderCustomerListFiltered(_custFiltered);
+}
+function renderCustomerListFiltered(list) {
+  const el = document.getElementById('customers-list');
+  el.innerHTML = list.map(c => {
+    const idx = customers.indexOf(c);
+    return `<div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-5);border-bottom:1px solid var(--border);cursor:pointer;"
+      onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"
+      onclick="selectCustomerByIndex(${idx})">
+      <div class="avatar avatar-sm" style="background:var(--primary);">${(c.name||'?').charAt(0)}</div>
+      <div><div style="font-weight:600;font-size:var(--text-sm);">${c.name||'—'}</div>
+      <div style="font-size:var(--text-xs);color:var(--text-muted);" dir="ltr">${c.phone||''}</div></div>
+    </div>`;
+  }).join('') || `<div style="padding:var(--sp-8);text-align:center;color:var(--text-muted);">لا توجد نتائج</div>`;
+}
+function selectCustomerByIndex(idx) { selectCustomer(customers[idx] || null); }
+function selectCustomer(customer) {
+  selectedCustomer = customer;
+  document.getElementById('selected-customer-name').textContent = customer ? customer.name : 'اختر العميل (اختياري)';
+  document.getElementById('selected-customer-phone').textContent = customer ? (customer.phone||'') : '';
+  document.getElementById('selected-customer-name').classList.toggle('selected', !!customer);
+  closeModal('customer-modal');
+  if (customer) showToast('info', `العميل: ${customer.name}`);
+}
+function openNewCustomerQuick() {
+  closeModal('customer-modal');
+  document.getElementById('nc-name').value = '';
+  document.getElementById('nc-phone').value = '';
+  openModal('new-cust-modal');
+}
+function saveQuickCustomer() {
+  const name  = document.getElementById('nc-name').value.trim();
+  const phone = document.getElementById('nc-phone').value.trim();
+  if (!name || !phone) { showToast('warning', 'أدخل الاسم ورقم الهاتف'); return; }
+  const cust = { name, phone, email:'', company:'', city:'', type:'عميل عادي', notes:'', date:new Date().toLocaleDateString('ar-SY') };
+  customers.push(cust);
+  _saveAcct('customers', customers);
+  _fsSync('customers', customers);
+  try { if (window.OfflineDB) window.OfflineDB.enqueue({ type:'INSERT', collection: _fbPath('customers'), data:{ ...cust, account:_acctKey() } }); } catch(e) {}
+  closeModal('new-cust-modal');
+  selectCustomer(cust);
+  showToast('success', `تم إضافة العميل ${name} ✓`);
+}
+
+// ============================================================
+//  SESSION
+// ============================================================
+// Show TODAY's invoices + sales for the currently logged-in cashier only.
+function updateSessionBar() {
+  const n = new Date();
+  const today = `${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}/${String(n.getDate()).padStart(2,'0')}`;
+  const uname = (posCashier && posCashier.username || '').toLowerCase();
+  const name  = (posCashier && posCashier.name || '').toLowerCase();
+  const all = _loadAcct('invoices', []) || [];
+  const mine = all.filter(s => {
+    if (s.source !== 'pos') return false;
+    if (s.date !== today) return false;
+    if (uname && (s.cashierUser||'').toLowerCase() === uname) return true;
+    if (!s.cashierUser && name && (s.cashier||'').toLowerCase() === name) return true;
+    return false;
+  });
+  const total = mine.reduce((s, inv) => s + (Number(inv.total) || 0), 0);
+  document.getElementById('session-total').textContent = fmt(total);
+  document.getElementById('session-count').textContent = mine.length;
+}
+// All POS sales recorded today (across sessions) for this account.
+function _todaySales() {
+  const all = _loadAcct('invoices', []) || [];
+  const now = new Date();
+  const sameDay = (ts) => {
+    if (!ts) return false;
+    const d = new Date(ts);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+  return all.filter(s => s.source === 'pos' && sameDay(s.timestamp || s.createdAt));
+}
+function openSessionReport() {
+  const sales = _todaySales();
+  const total = sales.reduce((s, x) => s + (Number(x.total) || 0), 0);
+  const firstTs = sales.reduce((m, x) => { const t = x.timestamp || x.createdAt; return (t && (!m || t < m)) ? t : m; }, null);
+  document.getElementById('rep-start').textContent = firstTs ? new Date(firstTs).toLocaleTimeString('ar-SY') : '—';
+  document.getElementById('rep-total').textContent = fmt(total);
+  document.getElementById('rep-count').textContent = sales.length;
+  document.getElementById('rep-avg').textContent = sales.length ? fmt(total / sales.length) : fmt(0);
+  document.getElementById('session-sales-list').innerHTML = sales.map(s => `
+    <tr>
+      <td style="font-weight:700;color:var(--primary);">${s.id}</td>
+      <td>${s.client || '—'}</td>
+      <td style="font-weight:700;">${fmtSaleTotal(s)}</td>
+      <td>${fmtMethodCur(s)}</td>
+      <td style="color:var(--text-muted);">${new Date(s.timestamp || s.createdAt).toLocaleTimeString('ar-SY')}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد مبيعات اليوم بعد</td></tr>';
+  openModal('session-modal');
+}
+function exportSessionReport() {
+  const sales = _todaySales();
+  if (!sales.length) { showToast('warning', 'لا توجد مبيعات للتصدير'); return; }
+  const bom = '\uFEFF';
+  const rows = [['رقم الفاتورة','العميل','المبلغ','الدفع','الوقت']]
+    .concat(sales.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp || s.createdAt).toLocaleString('ar-SY')]));
+  const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `session-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('success', 'تم تصدير التقرير ✓');
+}
+
+// ============================================================
+//  MY SALES (per-cashier history across all sessions)
+// ============================================================
+let _mySales = [];
+// Pull every POS invoice belonging to the logged-in cashier (account-scoped store).
+function getMySales() {
+  const all = _loadAcct('invoices', []) || [];
+  const uname = (posCashier && posCashier.username || '').toLowerCase();
+  const name  = (posCashier && posCashier.name || '').toLowerCase();
+  return all.filter(s => {
+    if (s.source !== 'pos') return false;
+    if (uname && (s.cashierUser||'').toLowerCase() === uname) return true;
+    if (!s.cashierUser && name && (s.cashier||'').toLowerCase() === name) return true;
+    return false;
+  });
+}
+let _mySalesRange = 'today';
+function openMySales() {
+  _mySales = getMySales();
+  _mySalesRange = 'today';
+  document.getElementById('my-search').value = '';
+  // Reset range button highlight (default = today)
+  document.querySelectorAll('#mysales-range-btns .btn').forEach((b, i) => {
+    b.classList.remove('btn-primary'); b.classList.add('btn-secondary');
+    if (i === 0) { b.classList.remove('btn-secondary'); b.classList.add('btn-primary'); }
+  });
+  applyMySalesFilters();
+  openModal('mysales-modal');
+}
+// True if a timestamp falls within the selected range.
+function _inSalesRange(ts, range) {
+  if (range === 'all') return true;
+  if (!ts) return false;
+  const d = new Date(ts), now = new Date();
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (range === 'today') return sameDay(d, now);
+  if (range === 'yesterday') { const y = new Date(now); y.setDate(now.getDate() - 1); return sameDay(d, y); }
+  if (range === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  if (range === 'lastmonth') {
+    const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return d.getFullYear() === lm.getFullYear() && d.getMonth() === lm.getMonth();
+  }
+  return true;
+}
+function setMySalesRange(range, btn) {
+  _mySalesRange = range;
+  document.querySelectorAll('#mysales-range-btns .btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); });
+  if (btn) { btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary'); }
+  applyMySalesFilters();
+}
+// Apply both the date range and the search query, then refresh KPIs + table.
+function applyMySalesFilters() {
+  const q = (document.getElementById('my-search')?.value || '').toLowerCase();
+  const f = _mySales.filter(s => {
+    const okR = _inSalesRange(s.timestamp || s.createdAt, _mySalesRange);
+    const okQ = !q || (s.id || '').toLowerCase().includes(q) || (s.client || '').toLowerCase().includes(q);
+    return okR && okQ;
+  });
+  const total = f.reduce((s, x) => s + (Number(x.total) || 0), 0);
+  document.getElementById('my-total').textContent = fmt(total);
+  document.getElementById('my-count').textContent = f.length;
+  document.getElementById('my-avg').textContent   = f.length ? fmt(total / f.length) : fmt(0);
+  document.getElementById('my-top').textContent   = topProductName(f) || '—';
+  renderMySales(f);
+}
+// Most-sold product (by quantity) across a set of sales.
+function topProductName(sales) {
+  const qty = {};
+  sales.forEach(s => (s.items||[]).forEach(it => {
+    qty[it.name] = (qty[it.name] || 0) + (Number(it.qty)||0);
+  }));
+  let best = null, bestQty = 0;
+  Object.keys(qty).forEach(n => { if (qty[n] > bestQty) { best = n; bestQty = qty[n]; } });
+  return best;
+}
+function renderMySales(list) {
+  document.getElementById('my-sales-list').innerHTML = list.map(s => `
+    <tr>
+      <td style="font-weight:700;color:var(--primary);">${s.id}</td>
+      <td>${s.client||'—'}</td>
+      <td style="font-weight:700;">${fmtSaleTotal(s)}</td>
+      <td>${fmtMethodCur(s)}</td>
+      <td style="color:var(--text-muted);">${new Date(s.timestamp||s.createdAt).toLocaleString('ar-SY')}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد مبيعات مسجلة باسمك بعد</td></tr>';
+}
+function filterMySales(q) {
+  applyMySalesFilters();
+}
+function exportMySales() {
+  const exp = _mySales.filter(s => _inSalesRange(s.timestamp || s.createdAt, _mySalesRange));
+  if (!exp.length) { showToast('warning', 'لا توجد مبيعات للتصدير'); return; }
+  const bom = '\uFEFF';
+  const rows = [['رقم الفاتورة','العميل','المبلغ','الدفع','التاريخ']]
+    .concat(exp.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp||s.createdAt).toLocaleString('ar-SY')]));
+  const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `my-sales-${(posCashier&&posCashier.username)||'cashier'}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('success', 'تم تصدير سجل مبيعاتي ✓');
+}
+
+// ============================================================
+//  INVOICES (all POS invoices — list, multi-select, print)
+// ============================================================
+let _invoicesList = [];
+function _saleTs(s) { return new Date(s.timestamp || s.createdAt || 0).getTime() || 0; }
+function getAllPosInvoices() {
+  return (_loadAcct('invoices', []) || []).filter(s => s && s.source === 'pos');
+}
+// Open the invoices modal sorted oldest → newest.
+function openInvoices() {
+  _invoicesList = getAllPosInvoices().slice().sort((a, b) => _saleTs(a) - _saleTs(b));
+  const sEl = document.getElementById('inv-search'); if (sEl) sEl.value = '';
+  const allChk = document.getElementById('inv-check-all'); if (allChk) allChk.checked = false;
+  renderInvoicesList(_invoicesList);
+  updateInvSelectedCount();
+  openModal('invoices-modal');
+}
+function _filteredInvoices() {
+  const q = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  if (!q) return _invoicesList;
+  return _invoicesList.filter(s => (s.id || '').toLowerCase().includes(q) || (s.client || '').toLowerCase().includes(q));
+}
+function filterInvoices() {
+  const allChk = document.getElementById('inv-check-all'); if (allChk) allChk.checked = false;
+  renderInvoicesList(_filteredInvoices());
+  updateInvSelectedCount();
+}
+function renderInvoicesList(list) {
+  document.getElementById('invoices-list').innerHTML = list.map((s, i) => `
+    <tr>
+      <td style="text-align:center;"><input type="checkbox" class="inv-check" value="${s.id}" onchange="updateInvSelectedCount()" /></td>
+      <td style="color:var(--text-muted);">${i + 1}</td>
+      <td style="font-weight:700;color:var(--primary);">${s.id}</td>
+      <td>${s.client || '—'}</td>
+      <td style="font-weight:700;">${fmtSaleTotal(s)}</td>
+      <td>${fmtMethodCur(s)}</td>
+      <td style="color:var(--text-muted);">${new Date(s.timestamp || s.createdAt).toLocaleString('ar-SY')}</td>
+      <td style="text-align:center;"><button class="btn btn-ghost btn-sm" onclick="printInvoiceById('${s.id}')" title="طباعة الفاتورة">🖨️</button></td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد فواتير بعد</td></tr>';
+}
+function toggleAllInvoices(master) {
+  document.querySelectorAll('#invoices-list .inv-check').forEach(c => { c.checked = master.checked; });
+  updateInvSelectedCount();
+}
+function updateInvSelectedCount() {
+  const n = document.querySelectorAll('#invoices-list .inv-check:checked').length;
+  const btn = document.getElementById('inv-print-selected');
+  if (btn) { btn.textContent = `🖨️ طباعة المحدد (${n})`; btn.disabled = n === 0; }
+}
+function _saleById(id) { return getAllPosInvoices().find(s => s.id === id) || null; }
+function printInvoiceById(id) {
+  const s = _saleById(id);
+  if (!s) { showToast('warning', 'الفاتورة غير موجودة'); return; }
+  printSales([s]);
+}
+function printSelectedInvoices() {
+  const ids = Array.from(document.querySelectorAll('#invoices-list .inv-check:checked')).map(c => c.value);
+  if (!ids.length) { showToast('warning', 'حدّد فاتورة واحدة على الأقل'); return; }
+  const sales = ids.map(_saleById).filter(Boolean);
+  if (!sales.length) { showToast('warning', 'تعذّر العثور على الفواتير المحددة'); return; }
+  printSales(sales);
+}
+// Print the most recent POS invoice (header «🖨️ آخر فاتورة»).
+function printLastInvoice() {
+  const all = getAllPosInvoices();
+  if (!all.length) { showToast('warning', 'لا توجد فواتير للطباعة'); return; }
+  const last = all.slice().sort((a, b) => _saleTs(b) - _saleTs(a))[0];
+  printSales([last]);
+}
+
+// ============================================================
+//  SYNC STATUS
+// ============================================================
+async function refreshSyncPill() {
+  let pending = 0;
+  try { if (window.OfflineDB) { const st = await window.OfflineDB.getStats(); pending = st.queueCount || 0; } } catch(e) {}
+  if (!navigator.onLine) setSyncState('offline', pending);
+  else if (pending > 0) setSyncState('syncing', pending);
+  else setSyncState('online', 0);
+}
+window.setSyncState = function(state, pending) {
+  const pill = document.getElementById('sync-pill');
+  const txt  = document.getElementById('sync-text');
+  if (!pill || !txt) return;
+  pill.classList.remove('offline','syncing');
+  if (state === 'offline') { pill.classList.add('offline'); txt.textContent = pending ? `غير متصل (${pending} بانتظار)` : 'غير متصل'; }
+  else if (state === 'syncing') { pill.classList.add('syncing'); txt.textContent = pending ? `مزامنة (${pending})...` : 'مزامنة...'; }
+  else { txt.textContent = 'متزامن'; }
+};
+
+// ============================================================
+//  HELPERS / UI
+// ============================================================
+function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
+function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+function showToast(type, msg) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+  container.appendChild(el);
+  setTimeout(() => { el.classList.add('removing'); setTimeout(() => el.remove(), 300); }, 2500);
+}
+function toggleTheme() {
+  // Cashier theme is SESSION-ONLY: apply it to this tab's DOM but do NOT persist
+  // to the shared 'a3mali_theme' key (that one is controlled by the admin).
+  // So a cashier's theme change stays local — it never reaches the admin page or
+  // other cashiers, and on refresh the cashier re-reads the admin's theme below.
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function tickClock() {
+  const el = document.getElementById('session-clock');
+  if (el) el.textContent = new Date().toLocaleTimeString('ar-SY', { hour:'2-digit', minute:'2-digit' });
+}
+
+// ============================================================
+//  BOOT
+// ============================================================
+// Called by the Firebase module once the company account is authenticated and
+// its data is hydrated. Hides the account-login screen and reveals the cashier
+// (employee) login — or resumes an in-progress cashier session after a refresh.
+window.__onAccountAuthed = function() {
+  window._appSettings = _loadAcct('settings', {}) || {};
+  const al = document.getElementById('account-lock'); if (al) al.style.display = 'none';
+
+  const sn = shopName();
+  const lockName = document.getElementById('lock-shop-name');   if (lockName) lockName.textContent = sn;
+  const hdrName  = document.getElementById('header-shop-name'); if (hdrName)  hdrName.textContent  = sn;
+
+  renderLockChips();
+
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem('a3mali_pos_cashier') || 'null'); } catch(e) {}
+  if (saved && saved.name) {
+    posCashier = saved;
+    // Resuming a session: block it if this cashier is now on leave / suspended.
+    if (enforceLeaveGuard()) return;
+    document.getElementById('pos-lock').style.display  = 'none';
+    document.getElementById('pos-shell').style.display = 'grid';
+    initPOS();
+  } else {
+    document.getElementById('pos-shell').style.display = 'none';
+    document.getElementById('pos-lock').style.display  = 'flex';
+    const u = document.getElementById('login-username'); if (u) u.focus();
+  }
+};
+
+// Called when no company account is signed in → show the account-login screen.
+window.__onAccountSignedOut = function() {
+  document.getElementById('pos-shell').style.display = 'none';
+  document.getElementById('pos-lock').style.display  = 'none';
+  const al = document.getElementById('account-lock'); if (al) al.style.display = 'flex';
+  const e = document.getElementById('acct-email'); if (e) e.focus();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Settings (account-scoped) for currency + shop name + tax
+  window._appSettings = _loadAcct('settings', {}) || {};
+  window._saveSettings = function() { _saveAcct('settings', window._appSettings || {}); _fsSync('settings', window._appSettings || {}); };
+
+  // Theme
+  applyTheme(localStorage.getItem('a3mali_theme') || 'light');
+
+  // Offline indicators
+  const banner = document.getElementById('offline-banner');
+  window.addEventListener('online',  () => { banner.classList.remove('show'); refreshSyncPill(); showToast('success', 'عاد الاتصال — جارٍ المزامنة...'); });
+  window.addEventListener('offline', () => { banner.classList.add('show'); refreshSyncPill(); });
+  if (!navigator.onLine) banner.classList.add('show');
+
+  // Which screen shows (account login → cashier login → POS) is driven by the
+  // Firebase auth state via __onAccountAuthed / __onAccountSignedOut below.
+  // If Firebase never loads, the module's catch calls __onAccountAuthed() as a
+  // local-only fallback.
+
+  // Clock + sync pill
+  tickClock();
+  setInterval(tickClock, 15000);
+  refreshSyncPill();
+  setInterval(refreshSyncPill, 8000);
+
+  // Safety net: even if no sync event fires, re-check periodically so an active
+  // cashier who goes on leave / gets suspended is logged out promptly.
+  setInterval(() => { try { enforceLeaveGuard(); } catch(_) {} }, 20000);
+
+  // Live stock/price sync: react to inventory or currency changes made in the
+  // dashboard (another tab). 'storage' fires only in OTHER tabs of same origin.
+  window.addEventListener('storage', (e) => {
+    if (!e.key) return;
+    if (e.key.indexOf('a3mali_products_') === 0) {
+      reloadProducts();
+    } else if (e.key.indexOf('a3mali_settings_') === 0) {
+      window._appSettings = _loadAcct('settings', {}) || {};   // refresh rate/base
+      reloadProducts();
+    } else if (e.key.indexOf('a3mali_leaves_') === 0 || e.key.indexOf('a3mali_employees_') === 0) {
+      // Leave approved / employee suspended in the dashboard tab → enforce now.
+      if (!enforceLeaveGuard() && (typeof posCashier === 'undefined' || !posCashier)) renderLockChips();
+    }
+  });
+  // Also refresh whenever the cashier tab regains focus / becomes visible.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { reloadProducts(); enforceLeaveGuard(); } });
+  window.addEventListener('focus', () => { reloadProducts(); enforceLeaveGuard(); });
+
+  document.getElementById('loading-overlay').classList.remove('active');
+});
+
+// Close modals on overlay click
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.modal-overlay.open').forEach(overlay => {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('pos-shell').style.display === 'none') return;
+  if (e.key === 'Enter' && e.ctrlKey) checkout();
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(o => closeModal(o.id));
+  if (e.key === 'F2') { e.preventDefault(); document.getElementById('product-search').focus(); }
+});
+</script>
+
+</body>
+</html>

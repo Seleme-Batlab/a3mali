@@ -1,0 +1,694 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light" data-lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تسجيل الدخول — أعمالي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/login.css" />
+</head>
+<body>
+
+<div id="loading-overlay"><div class="spinner"></div></div>
+<div id="toast-container"></div>
+
+<!-- Theme Toggle -->
+<button class="auth-theme-btn" onclick="toggleTheme()" id="themeBtn" title="تبديل الثيم">🌙</button>
+
+<main class="auth-page">
+
+  <!-- ===== BRAND PANEL ===== -->
+  <div class="auth-brand">
+    <div class="auth-brand-logo">
+      <div class="auth-brand-icon">ع</div>
+      <div>
+        <div class="auth-brand-name">أعمالي</div>
+        <div class="auth-brand-tagline">نظام إدارة الأعمال الذكي</div>
+      </div>
+    </div>
+
+    <div class="auth-brand-center">
+      <h2 class="auth-brand-heading">
+        أدر أعمالك<br />
+        <span>بثقة واحتراف</span>
+      </h2>
+      <p class="auth-brand-desc">
+        منصة ERP متكاملة تغطي المبيعات، المخزون، المحاسبة، الموارد البشرية وأكثر — في مكان واحد.
+      </p>
+
+      <div class="auth-features">
+        <div class="auth-feature">
+          <div class="auth-feature-icon">🔒</div>
+          <div class="auth-feature-text">
+            <div class="auth-feature-title">أمان على مستوى المؤسسات</div>
+            <div class="auth-feature-desc">تشفير متقدم ومصادقة ثنائية للحسابات الحساسة</div>
+          </div>
+        </div>
+        <div class="auth-feature">
+          <div class="auth-feature-icon">🌐</div>
+          <div class="auth-feature-text">
+            <div class="auth-feature-title">يعمل دون إنترنت</div>
+            <div class="auth-feature-desc">مزامنة تلقائية عند عودة الاتصال</div>
+          </div>
+        </div>
+        <div class="auth-feature">
+          <div class="auth-feature-icon">⚡</div>
+          <div class="auth-feature-text">
+            <div class="auth-feature-title">سريع وموثوق</div>
+            <div class="auth-feature-desc">99.9% وقت تشغيل مضمون على مدار الساعة</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-brand-footer">
+      © 2026 أعمالي — جميع الحقوق محفوظة
+    </div>
+  </div>
+
+  <!-- ===== FORM PANEL ===== -->
+  <div class="auth-form-panel">
+    <div class="auth-form-wrap">
+
+      <!-- ── STEP 1: Login ── -->
+      <div class="auth-step active" id="step-login">
+        <div class="auth-form-header">
+          <h1 class="auth-form-title">مرحباً بك 👋</h1>
+          <p class="auth-form-sub">سجّل دخولك للوصول إلى لوحة التحكم</p>
+        </div>
+
+        <div id="login-error" class="auth-error" style="display:none;">
+          <span>⚠️</span>
+          <span id="login-error-msg">بيانات غير صحيحة</span>
+        </div>
+
+        <form class="auth-form" id="login-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label">البريد الإلكتروني <span>*</span></label>
+            <input type="email" id="email" class="form-input" placeholder="you@company.com" required autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">كلمة المرور <span>*</span></label>
+            <div class="password-wrap">
+              <input type="password" id="password" class="form-input" placeholder="••••••••" required autocomplete="current-password" />
+              <span class="password-toggle" onclick="togglePass('password', this)" title="إظهار/إخفاء">👁</span>
+            </div>
+          </div>
+
+          <div class="auth-row">
+            <label class="form-check">
+              <input type="checkbox" id="remember" />
+              <span>تذكرني</span>
+            </label>
+            <span class="auth-forgot" onclick="showStep('step-forgot')">نسيت كلمة المرور؟</span>
+          </div>
+
+          <button type="submit" class="auth-submit" id="login-btn">
+            <span>تسجيل الدخول</span>
+          </button>
+        </form>
+
+        <div style="text-align:center;margin-top:var(--sp-5);font-size:var(--text-sm);color:var(--text-muted);">
+          ليس لديك حساب؟
+          <span style="color:var(--primary);cursor:pointer;font-weight:700;" onclick="showStep('step-register')">أنشئ حساباً جديداً</span>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: Register ── -->
+      <div class="auth-step" id="step-register">
+        <div>
+          <span class="auth-back" onclick="showStep('step-login')">← العودة لتسجيل الدخول</span>
+        </div>
+
+        <div class="auth-form-header">
+          <h2 class="auth-form-title">إنشاء حساب جديد 🏢</h2>
+          <p class="auth-form-sub" id="reg-form-sub">أدخل بياناتك لإنشاء حسابك</p>
+        </div>
+
+        <div id="reg-error" class="auth-error" style="display:none;">
+          <span>⚠️</span>
+          <span id="reg-error-msg">حدث خطأ أثناء إنشاء الحساب</span>
+        </div>
+
+        <form class="auth-form" id="register-form" onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label class="form-label">الاسم الكامل <span>*</span></label>
+            <input type="text" id="reg-name" class="form-input" placeholder="اسمك الكامل" required autocomplete="name" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">البريد الإلكتروني <span>*</span></label>
+            <input type="email" id="reg-email" class="form-input" placeholder="you@company.com" required autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">كلمة المرور <span>*</span></label>
+            <div class="password-wrap">
+              <input type="password" id="reg-pass" class="form-input" placeholder="8 أحرف على الأقل" required minlength="8" autocomplete="new-password" />
+              <span class="password-toggle" onclick="togglePass('reg-pass', this)">👁</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">تأكيد كلمة المرور <span>*</span></label>
+            <div class="password-wrap">
+              <input type="password" id="reg-confirm" class="form-input" placeholder="أعد إدخال كلمة المرور" required autocomplete="new-password" />
+              <span class="password-toggle" onclick="togglePass('reg-confirm', this)">👁</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">رمز الدخول الشخصي (PIN) <span>*</span></label>
+            <div class="password-wrap">
+              <input type="password" id="reg-pin" class="form-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="٤ إلى ٦ أرقام" required autocomplete="off" />
+              <span class="password-toggle" onclick="togglePass('reg-pin', this)">👁</span>
+            </div>
+            <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">
+              🔒 ستُطلب منك إدخال هذا الرمز في كل مرة تفتح فيها لوحة التحكم.
+            </div>
+          </div>
+
+          <button type="submit" class="auth-submit" id="register-btn">
+            <span>إنشاء الحساب</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- ── STEP 3: Admin Security Code ── -->
+      <div class="auth-step" id="step-admin-code">
+        <div>
+          <span class="auth-back" onclick="showStep('step-login')">← العودة</span>
+        </div>
+
+        <div class="auth-form-header">
+          <h2 class="auth-form-title">رمز الأمان 🔐</h2>
+          <p class="auth-form-sub">
+            تم اكتشاف أنك مدير النظام. أدخل رمز الأمان المكوّن من 6 أرقام للمتابعة.
+          </p>
+        </div>
+
+        <div id="code-error" class="auth-error" style="display:none;">
+          <span>⚠️</span>
+          <span>رمز الأمان غير صحيح. حاول مرة أخرى.</span>
+        </div>
+
+        <div class="admin-code-wrap" id="code-inputs">
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          <input class="code-digit" type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+        </div>
+
+        <button class="auth-submit" onclick="verifyAdminCode()">
+          <span>تحقق من الرمز</span>
+        </button>
+      </div>
+
+      <!-- ── STEP 4: Forgot Password ── -->
+      <div class="auth-step" id="step-forgot">
+        <div>
+          <span class="auth-back" onclick="showStep('step-login')">← العودة لتسجيل الدخول</span>
+        </div>
+
+        <div class="auth-form-header">
+          <h2 class="auth-form-title">إعادة تعيين كلمة المرور 🔑</h2>
+          <p class="auth-form-sub">أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين.</p>
+        </div>
+
+        <form class="auth-form" onsubmit="handleForgotPassword(event)">
+          <div class="form-group">
+            <label class="form-label">البريد الإلكتروني <span>*</span></label>
+            <input type="email" id="reset-email" class="form-input" placeholder="you@company.com" required />
+          </div>
+          <button type="submit" class="auth-submit">
+            <span>إرسال رابط التعيين</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- ── STEP 5: Reset Email Sent ── -->
+      <div class="auth-step" id="step-reset-sent">
+        <div style="text-align:center;padding:var(--sp-8) 0;">
+          <div style="font-size:4rem;margin-bottom:var(--sp-5);">📧</div>
+          <h2 class="auth-form-title" style="margin-bottom:var(--sp-3);">تم الإرسال!</h2>
+          <p style="color:var(--text-muted);font-size:var(--text-sm);line-height:1.7;margin-bottom:var(--sp-8);">
+            تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.<br />
+            تحقق من صندوق الوارد والبريد المزعج.
+          </p>
+          <button class="auth-submit" onclick="showStep('step-login')">
+            <span>العودة لتسجيل الدخول</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== FIREBASE SCRIPTS ===== -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+    onAuthStateChanged,
+    setPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence
+  } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    serverTimestamp
+  } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  let auth = null;
+  let db   = null;
+  let currentUser = null;
+
+  // ── Load Firebase config ──
+  async function loadConfig() {
+    try {
+      const mod = await import('./js/config.js');
+      const app = initializeApp(mod.firebaseConfig);
+      auth = getAuth(app);
+      db   = getFirestore(app);
+      initAuthListener();
+    } catch(err) {
+      console.warn('[أعمالي] لم يتم تحميل إعدادات النظام:', err);
+    }
+  }
+
+  function initAuthListener() {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Ensure dashboard has session info even when redirected from an
+        // already-authenticated Firebase state (no handleLogin path ran).
+        if (!sessionStorage.getItem('a3mali_user')) {
+          sessionStorage.setItem('a3mali_user', JSON.stringify({
+            uid:   user.uid,
+            email: user.email,
+            name:  user.displayName || user.email || 'مستخدم',
+            role:  'employee',
+          }));
+        }
+        window.location.href = 'dashboard.html';
+      }
+    });
+  }
+
+  // ── Map Firebase error codes to Arabic ──
+  function getArabicError(code) {
+    const map = {
+      'auth/user-not-found':       'البريد الإلكتروني غير مسجل في النظام.',
+      'auth/wrong-password':       'كلمة المرور غير صحيحة.',
+      'auth/invalid-credential':   'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+      'auth/invalid-email':        'صيغة البريد الإلكتروني غير صحيحة.',
+      'auth/user-disabled':        'هذا الحساب موقوف. تواصل مع المسؤول.',
+      'auth/too-many-requests':    'محاولات كثيرة جداً. انتظر قليلاً ثم حاول مرة أخرى.',
+      'auth/email-already-in-use': 'هذا البريد الإلكتروني مسجل مسبقاً.',
+      'auth/weak-password':        'كلمة المرور ضعيفة جداً. استخدم 8 أحرف على الأقل.',
+      'auth/network-request-failed': 'تعذّر الاتصال. تحقق من اتصالك بالإنترنت.',
+      'auth/operation-not-allowed': 'هذه العملية غير مسموح بها حالياً.',
+    };
+    return map[code] || 'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.';
+  }
+
+  // ── LOGIN ──
+  window.handleLogin = async function(e) {
+    e.preventDefault();
+    if (!auth) {
+      window.location.href = '404.html';
+      return;
+    }
+
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const remember = document.getElementById('remember').checked;
+    const btn      = document.getElementById('login-btn');
+
+    hideError('login-error');
+    btn.disabled = true;
+    btn.innerHTML = '<span>جارٍ التحقق...</span>';
+    showLoading(true);
+
+    try {
+      await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      currentUser = cred.user;
+
+      // Load Firestore profile
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const role = data.role || 'employee';
+
+        sessionStorage.setItem('a3mali_user', JSON.stringify({
+          uid:       currentUser.uid,
+          email:     currentUser.email,
+          name:      data.name || currentUser.email,
+          role:      role,
+          companyId: data.companyId,
+          branchId:  data.branchId,
+          pin:       data.dashboardPin || null,
+        }));
+
+        // Mirror personal PIN to device storage for the dashboard gate
+        if (data.dashboardPin) {
+          localStorage.setItem('a3mali_pin_' + currentUser.uid, data.dashboardPin);
+        }
+        // New login session must re-enter the PIN
+        sessionStorage.removeItem('a3mali_pin_ok');
+
+        if (role === 'super_admin') {
+          showLoading(false);
+          resetBtn('login-btn', 'تسجيل الدخول');
+          showStep('step-admin-code');
+          setTimeout(() => document.querySelector('.code-digit')?.focus(), 300);
+          return;
+        }
+      } else {
+        // Auth exists but no Firestore profile → reject
+        await auth.signOut();
+        throw { code: 'auth/user-not-found' };
+      }
+
+      showToast('success', 'تم تسجيل الدخول بنجاح! 🎉');
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 700);
+
+    } catch (err) {
+      showLoading(false);
+      resetBtn('login-btn', 'تسجيل الدخول');
+      showError('login-error', 'login-error-msg', getArabicError(err.code));
+    }
+  };
+
+  // ── Check if app is in first-setup mode (no account created yet) ──
+  window.checkFirstSetup = async function() {
+    let isFirst = true;
+
+    // Try Firestore settings (works if updated rules allow public read of non-existent doc)
+    try {
+      if (db) {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'app_settings'));
+        if (settingsDoc.exists()) isFirst = false;
+      }
+    } catch (_) { /* Firestore blocked — check localStorage */ }
+
+    // Check localStorage (set during a previous first-setup on this device)
+    if (isFirst && localStorage.getItem('a3mali_setup_done')) isFirst = false;
+
+    const sub = document.getElementById('reg-form-sub');
+    if (sub) sub.textContent = isFirst
+      ? 'مرحباً! أنت أول مستخدم — ستصبح مدير النظام تلقائياً.'
+      : 'أدخل بياناتك لإنشاء حسابك';
+
+    window._isFirstSetup = isFirst;
+    return isFirst;
+  };
+
+  // ── REGISTER ──
+  window.handleRegister = async function(e) {
+    e.preventDefault();
+    if (!auth || !db) {
+      showError('reg-error', 'reg-error-msg', 'النظام غير متصل حالياً. تواصل مع المسؤول.');
+      return;
+    }
+
+    const name    = document.getElementById('reg-name').value.trim();
+    const email   = document.getElementById('reg-email').value.trim();
+    const pass    = document.getElementById('reg-pass').value;
+    const confirm = document.getElementById('reg-confirm').value;
+    const pin     = document.getElementById('reg-pin').value.trim();
+    const btn     = document.getElementById('register-btn');
+
+    hideError('reg-error');
+
+    if (pass !== confirm) {
+      showError('reg-error', 'reg-error-msg', 'كلمات المرور غير متطابقة.');
+      return;
+    }
+    if (pass.length < 8) {
+      showError('reg-error', 'reg-error-msg', 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pin)) {
+      showError('reg-error', 'reg-error-msg', 'رمز الدخول الشخصي يجب أن يكون من ٤ إلى ٦ أرقام.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span>جارٍ إنشاء الحساب...</span>';
+    showLoading(true);
+
+    try {
+      // ── Determine mode: the first account created becomes the system admin ──
+      let isFirstSetup = false;
+      let regRole      = 'employee';
+      let companyId    = null;
+      let setupExists  = false;
+
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'app_settings'));
+        if (settingsDoc.exists()) {
+          setupExists = true;
+          const d   = settingsDoc.data();
+          regRole   = d.defaultRole || 'employee';
+          companyId = d.companyId   || null;
+        }
+      } catch (_) { /* Firestore blocked (unauthenticated) */ }
+
+      // Fallback: a previous first-setup on this device
+      if (!setupExists && localStorage.getItem('a3mali_setup_done')) setupExists = true;
+
+      // No setup yet → this is the first user → system admin
+      if (!setupExists) {
+        isFirstSetup = true;
+        regRole      = 'super_admin';
+      }
+
+      // ── Create Firebase Auth account ──
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const uid  = cred.user.uid;
+
+      // ── Create Firestore user profile ──
+      // (Requires updated Firestore rules: allow create if request.auth.uid == userId)
+      try {
+        await setDoc(doc(db, 'users', uid), {
+          uid,
+          name,
+          email,
+          role:         regRole,
+          companyId:    companyId,
+          dashboardPin: pin,
+          createdAt:    serverTimestamp(),
+          active:       true,
+        });
+      } catch (profileErr) {
+        // Firestore rules may block self-registration — store locally as fallback
+        console.warn('[أعمالي] تعذّر حفظ الملف الشخصي في Firestore:', profileErr.message);
+        localStorage.setItem('a3mali_pending_profile_' + uid, JSON.stringify({
+          uid, name, email, role: regRole, companyId, dashboardPin: pin, active: true,
+        }));
+      }
+
+      // Save personal PIN for the dashboard gate (device-level + per account)
+      localStorage.setItem('a3mali_pin_' + uid, pin);
+
+      // ── If first setup: mark the system as initialized ──
+      if (isFirstSetup) {
+        // Always save to localStorage as reliable fallback
+        localStorage.setItem('a3mali_setup_done', '1');
+        // Try to also record it in Firestore
+        // (Requires updated rules: allow create if !exists(app_settings))
+        try {
+          await setDoc(doc(db, 'settings', 'app_settings'), {
+            defaultRole: 'employee',
+            createdAt:   serverTimestamp(),
+          });
+        } catch (_) {
+          // Saved to localStorage — will work for single-device scenarios
+          console.warn('[أعمالي] تم تهيئة النظام محلياً. لدعم متعدد الأجهزة، حدّث قواعد Firestore.');
+        }
+      }
+
+      sessionStorage.setItem('a3mali_user', JSON.stringify({
+        uid, email, name, role: regRole, companyId, pin,
+      }));
+
+      showLoading(false);
+      const msg = isFirstSetup
+        ? `مرحباً ${name}! تم إنشاء حساب المدير بنجاح 🎉`
+        : `مرحباً ${name}! تم إنشاء حسابك بنجاح 🎉`;
+      showToast('success', msg);
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 900);
+
+    } catch (err) {
+      showLoading(false);
+      resetBtn('register-btn', 'إنشاء الحساب');
+
+      const errMap = {
+        'auth/email-already-in-use':   'هذا البريد الإلكتروني مسجل مسبقاً.',
+        'auth/weak-password':          'كلمة المرور ضعيفة. استخدم 8 أحرف على الأقل.',
+        'auth/invalid-email':          'صيغة البريد الإلكتروني غير صحيحة.',
+        'auth/network-request-failed': 'تعذّر الاتصال. تحقق من اتصالك بالإنترنت.',
+        'auth/operation-not-allowed':  'التسجيل غير مفعّل حالياً. تواصل مع المسؤول.',
+      };
+      showError('reg-error', 'reg-error-msg',
+        errMap[err.code] || 'حدث خطأ أثناء إنشاء الحساب. حاول مرة أخرى.');
+    }
+  };
+
+  // ── ADMIN CODE VERIFICATION ──
+  window.verifyAdminCode = async function() {
+    const digits = [...document.querySelectorAll('.code-digit')].map(i => i.value).join('');
+    if (digits.length < 6) {
+      showToast('error', 'أدخل الرمز المكوّن من 6 أرقام كاملاً');
+      return;
+    }
+    document.getElementById('code-error').style.display = 'none';
+    showLoading(true);
+
+    try {
+      if (db && currentUser) {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'super_admin'));
+        if (settingsDoc.exists()) {
+          const { adminCodeHash } = settingsDoc.data();
+          const isValid = digits === adminCodeHash;
+          if (!isValid) throw new Error('invalid_code');
+        } else {
+          throw new Error('invalid_code');
+        }
+      } else {
+        throw new Error('invalid_code');
+      }
+      showLoading(false);
+      showToast('success', 'تم التحقق بنجاح 🎉');
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 700);
+    } catch(err) {
+      showLoading(false);
+      document.getElementById('code-error').style.display = 'flex';
+      document.querySelectorAll('.code-digit').forEach(i => { i.value = ''; i.classList.add('error'); });
+      setTimeout(() => document.querySelectorAll('.code-digit').forEach(i => i.classList.remove('error')), 2000);
+      document.querySelector('.code-digit')?.focus();
+    }
+  };
+
+  // ── FORGOT PASSWORD ──
+  window.handleForgotPassword = async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('reset-email').value.trim();
+    showLoading(true);
+    try {
+      if (auth) {
+        await sendPasswordResetEmail(auth, email);
+      }
+      showLoading(false);
+      showStep('step-reset-sent');
+    } catch(err) {
+      showLoading(false);
+      showToast('error', 'البريد الإلكتروني غير مسجل في النظام.');
+    }
+  };
+
+  loadConfig();
+</script>
+
+<script>
+  // ===== UI HELPERS =====
+  function showStep(id) {
+    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    // When showing register step, detect first-setup mode and update UI
+    if (id === 'step-register' && typeof window.checkFirstSetup === 'function') {
+      window.checkFirstSetup();
+    }
+  }
+
+  function togglePass(fieldId, btn) {
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+    if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+    else { input.type = 'password'; btn.textContent = '👁'; }
+  }
+
+  function showError(wrapperId, msgId, msg) {
+    document.getElementById(wrapperId).style.display = 'flex';
+    document.getElementById(msgId).textContent = msg;
+  }
+
+  function hideError(wrapperId) {
+    document.getElementById(wrapperId).style.display = 'none';
+  }
+
+  function resetBtn(id, label) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = `<span>${label}</span>`;
+  }
+
+  function showLoading(show) {
+    document.getElementById('loading-overlay').classList.toggle('active', show);
+  }
+
+  function showToast(type, msg) {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('removing');
+      setTimeout(() => el.remove(), 300);
+    }, 3500);
+  }
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('a3mali_theme', next);
+    document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+  }
+
+  // Apply saved theme
+  const t = localStorage.getItem('a3mali_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+
+  // Admin code input — auto-advance
+  document.querySelectorAll('.code-digit').forEach((input, idx, inputs) => {
+    input.addEventListener('input', () => {
+      if (input.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+      if (input.value.length > 1) input.value = input.value.slice(-1);
+      const allFilled = [...inputs].every(i => i.value);
+      if (allFilled) setTimeout(verifyAdminCode, 200);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !input.value && idx > 0) inputs[idx - 1].focus();
+    });
+    input.addEventListener('paste', (e) => {
+      const text = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+      [...inputs].forEach((inp, i) => inp.value = text[i] || '');
+      if (text.length === 6) setTimeout(verifyAdminCode, 200);
+      e.preventDefault();
+    });
+  });
+</script>
+
+</body>
+</html>

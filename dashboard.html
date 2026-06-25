@@ -1,0 +1,391 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light" data-lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة التحكم — أعمالي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+</head>
+<body>
+
+<!-- Splash Screen (1 second on first load) -->
+<div id="splash-screen" style="position:fixed;inset:0;z-index:99999;background:var(--bg,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .4s ease;">
+  <img src="assets/a3malilogo.png" alt="أعمالي" style="width:140px;height:auto;object-fit:contain;" onerror="this.style.display='none'" />
+  <div style="font-size:28px;font-weight:800;color:var(--primary,#2563eb);letter-spacing:1px;">أعمالي</div>
+  <div style="font-size:14px;color:var(--text-muted,#64748b);">جاري التحميل...</div>
+  <div class="spinner" style="width:36px;height:36px;border:3px solid var(--border,#e2e8f0);border-top-color:var(--primary,#2563eb);border-radius:50%;animation:spin .7s linear infinite;"></div>
+</div>
+
+<div id="loading-overlay"><div class="spinner"></div></div>
+<div id="toast-container"></div>
+
+<!-- Dashboard PIN Lock -->
+<div id="pin-lock-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg,#0f172a);align-items:center;justify-content:center;">
+  <div style="width:min(360px,90vw);background:var(--surface,#fff);border:1px solid var(--border);border-radius:var(--r-xl,16px);padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="font-size:48px;margin-bottom:8px;">🔒</div>
+    <div style="font-size:var(--text-xl,20px);font-weight:800;margin-bottom:4px;">أدخل رمز الدخول</div>
+    <div style="font-size:var(--text-sm,14px);color:var(--text-muted);margin-bottom:20px;">لوحة التحكم محمية برمز شخصي</div>
+    <input id="pin-lock-input" type="password" inputmode="numeric" maxlength="6"
+      style="width:100%;text-align:center;letter-spacing:8px;font-size:24px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg,12px);background:var(--surface-2,#f1f5f9);margin-bottom:8px;"
+      placeholder="••••" onkeydown="if(event.key==='Enter')verifyDashboardPin()" />
+    <div id="pin-lock-error" style="display:none;color:var(--danger,#ef4444);font-size:var(--text-sm,14px);margin-bottom:8px;">رمز غير صحيح</div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="verifyDashboardPin()">دخول</button>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;" onclick="logout()">تسجيل الخروج</button>
+  </div>
+</div>
+<div id="offline-banner">📶 أنت غير متصل — تعمل في وضع offline</div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<div class="app-shell">
+
+  <!-- ===========================
+       SIDEBAR
+  =========================== -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Logo -->
+    <div class="sidebar-logo" style="cursor:default;">
+      <div class="sidebar-logo-icon">ع</div>
+      <div class="sidebar-logo-text">
+        <span class="sidebar-logo-name">أعمالي</span>
+        <span class="sidebar-logo-sub">ERP Platform</span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav" id="sidebar-nav">
+
+      <div class="sidebar-section" data-i18n="nav.main">الرئيسية</div>
+
+      <div class="sidebar-item active" data-module="dashboard" data-tooltip="لوحة التحكم" onclick="navigate('dashboard')">
+        <span class="sidebar-item-icon">📊</span>
+        <span class="sidebar-item-label" data-i18n="nav.dashboard">لوحة التحكم</span>
+      </div>
+
+      <div class="sidebar-group open" data-group="sales">
+        <div class="sidebar-section" onclick="toggleNavGroup(this)">
+          <span class="sidebar-section-text" data-i18n="nav.sales_section">المبيعات والعملاء</span>
+          <span class="sidebar-section-chevron">⌄</span>
+        </div>
+        <div class="sidebar-group-body">
+
+          <div class="sidebar-item" data-module="crm" data-tooltip="العملاء" onclick="navigate('crm')">
+            <span class="sidebar-item-icon">👥</span>
+            <span class="sidebar-item-label" data-i18n="nav.crm">إدارة العملاء</span>
+          </div>
+
+          <div class="sidebar-item" data-module="sales" data-tooltip="المبيعات" onclick="navigate('sales')">
+            <span class="sidebar-item-icon">🧾</span>
+            <span class="sidebar-item-label" data-i18n="nav.sales">المبيعات والفواتير</span>
+            <span class="sidebar-item-badge" id="badge-sales" style="display:none;"></span>
+          </div>
+
+          <div class="sidebar-item" data-module="installments" data-tooltip="إدارة الأقساط" onclick="navigate('installments')">
+            <span class="sidebar-item-icon">📅</span>
+            <span class="sidebar-item-label" data-i18n="nav.installments">إدارة الأقساط</span>
+          </div>
+
+          <div class="sidebar-item" data-module="commissions" data-tooltip="المبيعات المستهدفة والعمولات" onclick="navigate('commissions')">
+            <span class="sidebar-item-icon">🎯</span>
+            <span class="sidebar-item-label" data-i18n="nav.commissions">المبيعات المستهدفة والعمولات</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-group" data-group="operations">
+        <div class="sidebar-section" onclick="toggleNavGroup(this)">
+          <span class="sidebar-section-text" data-i18n="nav.operations">العمليات</span>
+          <span class="sidebar-section-chevron">⌄</span>
+        </div>
+        <div class="sidebar-group-body">
+
+          <div class="sidebar-item" data-module="inventory" data-tooltip="المخزون" onclick="navigate('inventory')">
+            <span class="sidebar-item-icon">📦</span>
+            <span class="sidebar-item-label" data-i18n="nav.inventory">المخزون</span>
+          </div>
+
+          <div class="sidebar-item" data-module="purchases" data-tooltip="المشتريات" onclick="navigate('purchases')">
+            <span class="sidebar-item-icon">🛒</span>
+            <span class="sidebar-item-label" data-i18n="nav.purchases">المشتريات</span>
+          </div>
+
+          <div class="sidebar-item" data-module="operations" data-tooltip="العمليات" onclick="navigate('operations')">
+            <span class="sidebar-item-icon">🔧</span>
+            <span class="sidebar-item-label" data-i18n="nav.operations_module">العمليات</span>
+          </div>
+
+          <div class="sidebar-item" data-module="suppliers" data-tooltip="الموردين" onclick="navigate('suppliers')">
+            <span class="sidebar-item-icon">🏭</span>
+            <span class="sidebar-item-label" data-i18n="nav.suppliers">الموردين</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-group" data-group="finance">
+        <div class="sidebar-section" onclick="toggleNavGroup(this)">
+          <span class="sidebar-section-text" data-i18n="nav.finance">المالية والموارد</span>
+          <span class="sidebar-section-chevron">⌄</span>
+        </div>
+        <div class="sidebar-group-body">
+
+          <div class="sidebar-item" data-module="cashbox" data-tooltip="الصندوق" onclick="navigate('cashbox')">
+            <span class="sidebar-item-icon">🧰</span>
+            <span class="sidebar-item-label" data-i18n="nav.cashbox">الصندوق</span>
+          </div>
+
+          <div class="sidebar-item" data-module="expenses" data-tooltip="المصروف" onclick="navigate('expenses')">
+            <span class="sidebar-item-icon">🧾</span>
+            <span class="sidebar-item-label" data-i18n="nav.expenses">المصروف</span>
+          </div>
+
+          <div class="sidebar-item" data-module="debts" data-tooltip="الديون" onclick="navigate('debts')">
+            <span class="sidebar-item-icon">💳</span>
+            <span class="sidebar-item-label">الديون</span>
+          </div>
+
+          <div class="sidebar-item" data-module="accounting" data-tooltip="المحاسبة" onclick="navigate('accounting')">
+            <span class="sidebar-item-icon">💰</span>
+            <span class="sidebar-item-label" data-i18n="nav.accounting">المحاسبة</span>
+          </div>
+
+          <div class="sidebar-item" data-module="hr" data-tooltip="الموظفون" onclick="navigate('hr')">
+            <span class="sidebar-item-icon">👨‍💼</span>
+            <span class="sidebar-item-label" data-i18n="nav.hr">الموظفون</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-group" data-group="reports">
+        <div class="sidebar-section" onclick="toggleNavGroup(this)">
+          <span class="sidebar-section-text" data-i18n="nav.reports_section">التقارير والإدارة</span>
+          <span class="sidebar-section-chevron">⌄</span>
+        </div>
+        <div class="sidebar-group-body">
+
+          <div class="sidebar-item" data-module="reports" data-tooltip="التقارير" onclick="navigate('reports')">
+            <span class="sidebar-item-icon">📈</span>
+            <span class="sidebar-item-label" data-i18n="nav.reports">التقارير</span>
+          </div>
+
+          <div class="sidebar-item" data-module="settings" data-tooltip="الإعدادات" onclick="navigate('settings')">
+            <span class="sidebar-item-icon">⚙️</span>
+            <span class="sidebar-item-label" data-i18n="nav.settings">الإعدادات</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-item" data-tooltip="نقطة البيع" onclick="window.open('cashier.html','_blank')">
+        <span class="sidebar-item-icon">🏪</span>
+        <span class="sidebar-item-label" data-i18n="nav.pos">نقطة البيع (POS)</span>
+      </div>
+
+    </nav>
+
+    <!-- Bottom: User -->
+    <div class="sidebar-bottom" style="position:relative;overflow:visible;">
+      <!-- Profile popup (appears above) -->
+      <div class="dropdown-menu" id="user-menu" style="position:absolute;bottom:calc(100% + 6px);right:0;left:0;z-index:400;min-width:0;">
+        <div style="padding:var(--sp-4);border-bottom:1px solid var(--border);">
+          <div id="menu-user-name" style="font-weight:700;font-size:var(--text-sm);">المستخدم</div>
+          <div id="menu-user-email" style="font-size:var(--text-xs);color:var(--text-muted);">—</div>
+        </div>
+        <div class="dropdown-item" onclick="navigate('settings')">⚙️ الإعدادات</div>
+        <div class="dropdown-item" onclick="navigate('settings')">👤 الملف الشخصي</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item danger" onclick="logout()">🚪 تسجيل الخروج</div>
+      </div>
+      <div class="sidebar-user" id="sidebar-user" onclick="toggleUserMenu()">
+        <div class="avatar avatar-sm" id="user-avatar" style="background:var(--primary);">م</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="user-name">جاري التحميل...</div>
+          <div class="sidebar-user-role" id="user-role">—</div>
+        </div>
+        <div class="sync-indicator" id="sync-indicator" title="حالة المزامنة">
+          <div class="sync-dot"></div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ===========================
+       MAIN WRAPPER
+  =========================== -->
+  <div class="main-wrapper" id="main-wrapper">
+
+    <!-- App Header -->
+    <header class="app-header">
+      <button class="header-toggle" onclick="toggleSidebar()" title="القائمة">☰</button>
+
+      <div class="header-search hide-sm" style="position:relative;">
+        <div class="search-wrap">
+          <input class="search-input" type="text" placeholder="ابحث في النظام..." id="global-search"
+            oninput="globalSearch(this.value)" onkeydown="globalSearchKey(event)" autocomplete="off" />
+          <span class="search-icon">🔍</span>
+        </div>
+        <div id="global-search-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;overflow:hidden;"></div>
+      </div>
+
+      <div class="header-right">
+        <!-- Sync status -->
+        <div class="sync-indicator hide-md" id="header-sync">
+          <div class="sync-dot"></div>
+          <span id="sync-label">متزامن</span>
+        </div>
+
+        <!-- Base currency -->
+        <button class="header-lang" onclick="toggleCurrencyMenu()" title="العملة الأساسية" id="currency-btn">
+          <span id="currency-label">ل.س</span>
+        </button>
+
+        <!-- Theme -->
+        <div style="position:relative;">
+          <button class="header-btn" onclick="toggleThemeMenu()" title="المظهر" id="theme-btn">🌙</button>
+          <div class="dropdown-menu" id="theme-menu" style="top:calc(100% + 8px);left:0;right:auto;min-width:170px;">
+            <div class="dropdown-item" onclick="selectTheme('light');toggleThemeMenu()">☀️ فاتح</div>
+            <div class="dropdown-item" onclick="selectTheme('dark');toggleThemeMenu()">🌙 داكن</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" onclick="openThemePicker();toggleThemeMenu()">🎨 مخصص…</div>
+          </div>
+        </div>
+
+        <!-- Notifications -->
+        <button class="header-btn" onclick="toggleNotif()" title="الإشعارات" id="notif-btn">
+          🔔
+          <span class="header-btn-badge"></span>
+        </button>
+
+        <!-- User -->
+        <div style="position:relative;">
+          <div class="avatar avatar-sm cursor-pointer" id="header-avatar" onclick="toggleHeaderUserMenu()" style="background:var(--primary);">م</div>
+          <div class="dropdown-menu" id="header-user-menu" style="top:calc(100% + 8px);left:0;right:auto;min-width:180px;">
+            <div class="dropdown-item" onclick="navigate('settings');toggleHeaderUserMenu()">⚙️ الإعدادات</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item danger" onclick="logout()">🚪 تسجيل الخروج</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Notifications Panel -->
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>الإشعارات</span>
+        <button class="btn btn-ghost btn-sm" onclick="markAllRead()">تعليم الكل مقروء</button>
+      </div>
+      <div id="notif-list">
+        <div class="empty-state" style="padding:32px 16px;text-align:center;color:var(--text-muted);">
+          <div class="empty-icon" style="font-size:32px;">🔔</div>
+          <div class="empty-title">لا توجد إشعارات</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Currency Panel -->
+    <div class="notif-panel" id="currency-panel">
+      <div class="notif-header"><span>العملة الأساسية</span></div>
+      <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4);">
+        <div class="form-group">
+          <label class="form-label">العملة المعروضة في النظام</label>
+          <select class="form-select" id="cur-base">
+            <option value="SYP">ليرة سورية (ل.س)</option>
+            <option value="USD">دولار أمريكي ($)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">مصدر سعر الصرف</label>
+          <select class="form-select" id="cur-mode" onchange="onCurrencyModeChange(this.value)">
+            <option value="manual">يدوي</option>
+            <option value="auto">تلقائي (عبر الإنترنت)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">سعر الصرف — 1 دولار = ؟ ليرة سورية</label>
+          <div style="display:flex;gap:var(--sp-2);">
+            <input type="number" class="form-input" id="cur-rate" min="0" step="any" placeholder="مثال: 15000" style="flex:1;" />
+            <button class="btn btn-secondary btn-sm" id="cur-fetch-btn" onclick="fetchAutoRate()" style="display:none;white-space:nowrap;">🔄 جلب</button>
+          </div>
+          <div id="cur-rate-meta" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;"></div>
+        </div>
+        <button class="btn btn-primary" onclick="applyCurrencySettings()">حفظ وتطبيق</button>
+      </div>
+    </div>
+
+    <!-- ===========================
+         MAIN CONTENT
+    =========================== -->
+    <main class="content-area" id="content">
+      <!-- Rendered by JS modules -->
+      <div class="empty-state">
+        <div class="empty-icon">⏳</div>
+        <div class="empty-title">جارٍ التحميل...</div>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<!-- ===========================
+     GLOBAL MODALS
+=========================== -->
+
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="confirm-title">تأكيد العملية</h3>
+      <button class="modal-close" onclick="closeModal('confirm-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-msg" style="font-size:var(--text-base);color:var(--text-muted);"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('confirm-modal')">إلغاء</button>
+      <button class="btn btn-danger" id="confirm-ok">تأكيد الحذف</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     SCRIPTS (extracted to /js)
+     dash.js      → classic: render + UI logic (global fns for onclick)
+     dash-boot.js → module: Firebase auth + imports + initDashboard
+=========================== -->
+<script src="./js/currency.js"></script>
+<script src="./js/dash.js"></script>
+<script type="module" src="./js/dash-boot.js"></script>
+<script>
+  // Splash screen: show for 1 second then fade out
+  (function() {
+    var splash = document.getElementById('splash-screen');
+    if (!splash) return;
+    setTimeout(function() {
+      splash.style.opacity = '0';
+      setTimeout(function() { splash.style.display = 'none'; }, 400);
+    }, 1000);
+  })();
+</script>
+
+<!-- Persistent invoice view modal (shared by dashboard + sales) -->
+<div class="modal-overlay" id="view-invoice-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="view-inv-title">عرض الفاتورة</h3>
+      <button class="modal-close" onclick="closeModal('view-invoice-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="view-inv-body" style="padding:var(--sp-4);"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('view-invoice-modal')">إغلاق</button>
+      <button class="btn btn-primary" id="view-inv-print-btn" onclick="">🖨️ طباعة</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

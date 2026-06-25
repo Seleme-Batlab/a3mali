@@ -1,0 +1,177 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>خطأ — أعمالي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    .error-page {
+      text-align: center;
+      padding: var(--sp-8);
+      max-width: 520px;
+    }
+
+    .error-code {
+      font-size: 8rem;
+      font-weight: 900;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--blue-600), var(--violet-600));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: var(--sp-4);
+      letter-spacing: -4px;
+    }
+
+    .error-icon {
+      font-size: 4rem;
+      margin-bottom: var(--sp-5);
+    }
+
+    .error-title {
+      font-size: var(--text-3xl);
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: var(--sp-3);
+    }
+
+    .error-desc {
+      font-size: var(--text-base);
+      color: var(--text-muted);
+      line-height: 1.7;
+      margin-bottom: var(--sp-8);
+    }
+
+    .error-actions {
+      display: flex;
+      gap: var(--sp-3);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .error-logo {
+      position: fixed;
+      top: var(--sp-5);
+      right: var(--sp-6);
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      font-weight: 800;
+      font-size: var(--text-lg);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .error-logo-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--r-md);
+      background: linear-gradient(135deg, var(--blue-600), var(--violet-600));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    .theme-btn-fixed {
+      position: fixed;
+      top: var(--sp-5);
+      left: var(--sp-6);
+      width: 40px;
+      height: 40px;
+      border-radius: var(--r-full);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: all var(--tr-fast);
+    }
+
+    .theme-btn-fixed:hover {
+      background: var(--surface-2);
+    }
+
+    .error-detail {
+      margin-top: var(--sp-6);
+      padding: var(--sp-4);
+      background: var(--surface-2);
+      border-radius: var(--r-lg);
+      border: 1px solid var(--border);
+      font-size: var(--text-sm);
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Logo -->
+<a href="index.html" class="error-logo">
+  <div class="error-logo-icon">ع</div>
+  أعمالي
+</a>
+
+<!-- Theme Toggle -->
+<button class="theme-btn-fixed" onclick="toggleTheme()" id="themeBtn">🌙</button>
+
+<div class="error-page">
+  <div class="error-icon">⚠️</div>
+  <div class="error-code">خطأ</div>
+  <h1 class="error-title">حدث خطأ غير متوقع</h1>
+  <p class="error-desc">
+    تعذّر تحميل الصفحة أو حدث خطأ في النظام.<br />
+    قد تكون الجلسة منتهية أو الصفحة غير موجودة.
+  </p>
+
+  <div class="error-actions">
+    <a href="login.html" class="btn btn-primary">🔐 تسجيل الدخول</a>
+    <a href="index.html" class="btn btn-secondary">🏠 الصفحة الرئيسية</a>
+    <button class="btn btn-ghost" onclick="history.back()">← العودة</button>
+  </div>
+
+  <div class="error-detail" id="error-detail" style="display:none;"></div>
+</div>
+
+<script>
+  // Apply saved theme
+  const t = localStorage.getItem('a3mali_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('a3mali_theme', next);
+    document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+  }
+
+  // Show error detail from URL param if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const errMsg = urlParams.get('msg');
+  if (errMsg) {
+    const detail = document.getElementById('error-detail');
+    detail.style.display = 'block';
+    detail.textContent = decodeURIComponent(errMsg);
+  }
+</script>
+
+</body>
+</html>
