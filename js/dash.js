@@ -1142,6 +1142,7 @@ ${bodyHTML}
               <select class="form-select" id="inv-currency" onchange="calcInvoiceTotal()">
                 <option value="SYP">ليرة سورية (ل.س)</option>
                 <option value="USD">دولار ($)</option>
+                <option value="TRY">ليرة تركية (₺)</option>
               </select>
             </div>
             <div class="form-group"><label class="form-label">المندوب</label>
@@ -1877,7 +1878,8 @@ ${bodyHTML}
   function _curOptions(sel) {
     const cur = sel || (window.Currency ? window.Currency.base : 'SYP');
     return `<option value="SYP" ${cur==='SYP'?'selected':''}>ليرة سورية (ل.س)</option>
-            <option value="USD" ${cur==='USD'?'selected':''}>دولار ($)</option>`;
+            <option value="USD" ${cur==='USD'?'selected':''}>دولار ($)</option>
+            <option value="TRY" ${cur==='TRY'?'selected':''}>ليرة تركية (₺)</option>`;
   }
 
   // CASH BOX (الصندوق)
@@ -3200,6 +3202,7 @@ ${bodyHTML}
                 <select class="form-input" id="emp-salary-currency" style="max-width:120px;">
                   <option value="SYP">ليرة سورية (ل.س)</option>
                   <option value="USD">دولار ($)</option>
+                  <option value="TRY">ليرة تركية (₺)</option>
                 </select>
               </div>
             </div>
