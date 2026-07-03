@@ -4,12 +4,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>تسجيل الدخول — أعمالي</title>
+
+  <!-- ===================== SEO ===================== -->
+  <title>تسجيل الدخول | أعمالي — نظام ERP ومحاسبة سحابي</title>
+  <meta name="description" content="سجّل الدخول إلى حسابك في أعمالي، نظام ERP السحابي العربي لإدارة المبيعات والمخزون والمحاسبة ونقاط البيع." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="canonical" href="https://a3mali.com/login.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="أعمالي" />
+  <meta property="og:locale" content="ar_AR" />
+  <meta property="og:title" content="تسجيل الدخول | أعمالي" />
+  <meta property="og:description" content="ادخل إلى حسابك في أعمالي — نظام ERP السحابي العربي المتكامل." />
+  <meta property="og:image" content="https://a3mali.com/assets/a3malilogo.png" />
+
+  <!-- Favicon & Apple Touch Icons -->
+  <link rel="icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="shortcut icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="apple-touch-icon" href="assets/a3malilogo.png" />
+  <meta name="apple-mobile-web-app-title" content="أعمالي" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/login.css" />
+
+   <link rel="icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="shortcut icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="apple-touch-icon" href="assets/a3malilogo.png" />
 </head>
 <body>
 
@@ -293,7 +320,9 @@
 
   function initAuthListener() {
     onAuthStateChanged(auth, (user) => {
-      if (user) {
+      // _isRegistering flag is set during handleRegister to prevent premature
+      // redirect — registration writes to Firestore first, then redirects itself.
+      if (user && !window._isRegistering) {
         // Ensure dashboard has session info even when redirected from an
         // already-authenticated Firebase state (no handleLogin path ran).
         if (!sessionStorage.getItem('a3mali_user')) {
@@ -355,6 +384,7 @@
         const data = userDoc.data();
         const role = data.role || 'employee';
 
+        const userPin = data.localPin || data.dashboardPin || null;
         sessionStorage.setItem('a3mali_user', JSON.stringify({
           uid:       currentUser.uid,
           email:     currentUser.email,
@@ -362,12 +392,12 @@
           role:      role,
           companyId: data.companyId,
           branchId:  data.branchId,
-          pin:       data.dashboardPin || null,
+          pin:       userPin,
         }));
 
         // Mirror personal PIN to device storage for the dashboard gate
-        if (data.dashboardPin) {
-          localStorage.setItem('a3mali_pin_' + currentUser.uid, data.dashboardPin);
+        if (userPin) {
+          localStorage.setItem('a3mali_pin_' + currentUser.uid, userPin);
         }
         // New login session must re-enter the PIN
         sessionStorage.removeItem('a3mali_pin_ok');
@@ -452,6 +482,10 @@
     btn.disabled = true;
     btn.innerHTML = '<span>جارٍ إنشاء الحساب...</span>';
     showLoading(true);
+    // Prevent onAuthStateChanged from redirecting mid-registration
+    // (Firebase fires it immediately after createUserWithEmailAndPassword,
+    //  before our Firestore writes complete — the flag holds it off).
+    window._isRegistering = true;
 
     try {
       // ── Determine mode: the first account created becomes the system admin ──
@@ -485,22 +519,31 @@
 
       // ── Create Firestore user profile ──
       // (Requires updated Firestore rules: allow create if request.auth.uid == userId)
+      // Subscription expires 7 days from now (stored as readable date string e.g. "2026-07-03")
+      const _exp = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const subscriptionExpiry = _exp.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
       try {
         await setDoc(doc(db, 'users', uid), {
           uid,
           name,
           email,
-          role:         regRole,
-          companyId:    companyId,
-          dashboardPin: pin,
-          createdAt:    serverTimestamp(),
-          active:       true,
+          role:               regRole,
+          companyId:          companyId || uid,
+          localPin:           pin,
+          subscriptionExpiry: subscriptionExpiry,
+          createdAt:          serverTimestamp(),
+          active:             true,
         });
       } catch (profileErr) {
         // Firestore rules may block self-registration — store locally as fallback
         console.warn('[أعمالي] تعذّر حفظ الملف الشخصي في Firestore:', profileErr.message);
         localStorage.setItem('a3mali_pending_profile_' + uid, JSON.stringify({
-          uid, name, email, role: regRole, companyId, dashboardPin: pin, active: true,
+          uid, name, email, role: regRole,
+          companyId: companyId || uid,
+          localPin: pin,
+          subscriptionExpiry: subscriptionExpiry,
+          active: true,
         }));
       }
 
@@ -533,9 +576,12 @@
         ? `مرحباً ${name}! تم إنشاء حساب المدير بنجاح 🎉`
         : `مرحباً ${name}! تم إنشاء حسابك بنجاح 🎉`;
       showToast('success', msg);
+      // All Firestore writes done — safe to navigate now
+      window._isRegistering = false;
       setTimeout(() => { window.location.href = 'dashboard.html'; }, 900);
 
     } catch (err) {
+      window._isRegistering = false;
       showLoading(false);
       resetBtn('register-btn', 'إنشاء الحساب');
 

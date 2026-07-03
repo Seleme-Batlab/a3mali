@@ -4,7 +4,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>لوحة التحكم — أعمالي</title>
+
+  <!-- ===================== SEO ===================== -->
+  <title>لوحة التحكم | أعمالي — نظام ERP ومحاسبة سحابي</title>
+  <meta name="description" content="لوحة تحكم أعمالي لإدارة المبيعات والمخزون والمحاسبة والفواتير ونقاط البيع والموظفين من مكان واحد." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="canonical" href="https://a3mali.com/dashboard.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="أعمالي" />
+  <meta property="og:locale" content="ar_AR" />
+  <meta property="og:title" content="لوحة التحكم | أعمالي" />
+  <meta property="og:description" content="لوحة تحكم أعمالي — نظام ERP السحابي العربي المتكامل." />
+  <meta property="og:image" content="https://a3mali.com/assets/a3malilogo.png" />
+
+  <!-- Favicon & Apple Touch Icons -->
+  <link rel="icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="shortcut icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="apple-touch-icon" href="assets/a3malilogo.png" />
+  <meta name="apple-mobile-web-app-title" content="أعمالي" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -21,8 +44,56 @@
   <div class="spinner" style="width:36px;height:36px;border:3px solid var(--border,#e2e8f0);border-top-color:var(--primary,#2563eb);border-radius:50%;animation:spin .7s linear infinite;"></div>
 </div>
 
-<div id="loading-overlay"><div class="spinner"></div></div>
+<div id="loading-overlay" class="active"><div class="spinner"></div></div>
 <div id="toast-container"></div>
+
+<!-- Entry Choice Popup: Dashboard or Cashier -->
+<div id="entry-choice-overlay" style="display:none;position:fixed;inset:0;z-index:100000;background:linear-gradient(150deg,#1e3a5f 0%,#1e40af 45%,#5b21b6 100%);align-items:center;justify-content:center;">
+
+  <!-- شاشة 1: اختيار الوجهة -->
+  <div id="entry-screen-choice" style="width:min(440px,93vw);text-align:center;padding:20px;">
+    <img src="assets/a3malilogo.png" alt="أعمالي" style="width:76px;height:76px;object-fit:contain;border-radius:18px;margin-bottom:14px;box-shadow:0 8px 32px rgba(0,0,0,.35);" onerror="this.style.display='none'" />
+    <div style="font-size:30px;font-weight:900;color:#fff;letter-spacing:.5px;margin-bottom:6px;">أعمالي</div>
+    <div style="font-size:14px;color:rgba(255,255,255,.65);margin-bottom:36px;">اختر وجهتك للمتابعة</div>
+    <div style="display:flex;gap:16px;justify-content:center;">
+      <button id="entry-btn-cashier" onclick="window._entryChooseOption('cashier')"
+        style="flex:1;max-width:185px;padding:28px 14px 22px;border-radius:22px;border:2px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;cursor:pointer;font-family:inherit;">
+        <div style="font-size:46px;margin-bottom:10px;">🏪</div>
+        <div style="font-size:17px;font-weight:800;">الكاشير</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:5px;">نقطة البيع</div>
+      </button>
+      <button id="entry-btn-dashboard" onclick="window._entryShowPin()"
+        style="flex:1;max-width:185px;padding:28px 14px 22px;border-radius:22px;border:2px solid rgba(255,255,255,.38);background:rgba(255,255,255,.17);color:#fff;cursor:pointer;font-family:inherit;">
+        <div style="font-size:46px;margin-bottom:10px;">📊</div>
+        <div style="font-size:17px;font-weight:800;">لوحة التحكم</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:5px;">الإدارة والتحليل</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- شاشة 2: إدخال PIN -->
+  <div id="entry-screen-pin" style="display:none;width:min(360px,90vw);padding:20px;text-align:center;">
+    <div style="display:flex;margin-bottom:28px;">
+      <button onclick="window._entryBackToChoice()"
+        style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;padding:7px 18px;border-radius:30px;cursor:pointer;font-family:inherit;font-size:13px;">
+        ← رجوع
+      </button>
+    </div>
+    <div style="font-size:44px;margin-bottom:12px;">🔒</div>
+    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:6px;">أدخل رمز الدخول</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:24px;">لوحة التحكم محمية برمز شخصي</div>
+    <input id="entry-pin-input" type="password" inputmode="numeric" maxlength="6"
+      style="width:100%;text-align:center;letter-spacing:10px;font-size:28px;padding:14px;border:2px solid rgba(255,255,255,.3);border-radius:14px;background:rgba(255,255,255,.12);color:#fff;margin-bottom:10px;font-family:inherit;outline:none;box-sizing:border-box;"
+      placeholder="••••"
+      onkeydown="if(event.key==='Enter')window._entryVerifyPin()" />
+    <div id="entry-pin-error" style="display:none;color:#fca5a5;font-size:13px;margin-bottom:10px;">رمز غير صحيح، حاول مرة أخرى</div>
+    <button onclick="window._entryVerifyPin()"
+      style="width:100%;padding:14px;border-radius:14px;background:#2563eb;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;">
+      دخول
+    </button>
+  </div>
+
+</div>
 
 <!-- Dashboard PIN Lock -->
 <div id="pin-lock-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg,#0f172a);align-items:center;justify-content:center;">
@@ -179,7 +250,7 @@
         </div>
       </div>
 
-      <div class="sidebar-item" data-tooltip="نقطة البيع" onclick="window.open('cashier.html','_blank')">
+      <div class="sidebar-item" data-tooltip="نقطة البيع" onclick="window.location.href='cashier.html'">
         <span class="sidebar-item-icon">🏪</span>
         <span class="sidebar-item-label" data-i18n="nav.pos">نقطة البيع (POS)</span>
       </div>
@@ -292,9 +363,10 @@
       <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4);">
         <div class="form-group">
           <label class="form-label">العملة المعروضة في النظام</label>
-          <select class="form-select" id="cur-base">
+          <select class="form-select" id="cur-base" onchange="onCurrencyBaseChange(this.value)">
             <option value="SYP">ليرة سورية (ل.س)</option>
             <option value="USD">دولار أمريكي ($)</option>
+            <option value="TRY">ليرة تركية (₺)</option>
           </select>
         </div>
         <div class="form-group">
@@ -304,13 +376,21 @@
             <option value="auto">تلقائي (عبر الإنترنت)</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="cur-syp-rate-wrap">
           <label class="form-label">سعر الصرف — 1 دولار = ؟ ليرة سورية</label>
           <div style="display:flex;gap:var(--sp-2);">
             <input type="number" class="form-input" id="cur-rate" min="0" step="any" placeholder="مثال: 15000" style="flex:1;" />
             <button class="btn btn-secondary btn-sm" id="cur-fetch-btn" onclick="fetchAutoRate()" style="display:none;white-space:nowrap;">🔄 جلب</button>
           </div>
           <div id="cur-rate-meta" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;"></div>
+        </div>
+        <div class="form-group" id="cur-try-rate-wrap" style="display:none;">
+          <label class="form-label">سعر الصرف — 1 دولار = ؟ ليرة تركية</label>
+          <div style="display:flex;gap:var(--sp-2);">
+            <input type="number" class="form-input" id="cur-try-rate" min="0" step="any" placeholder="مثال: 32" style="flex:1;" />
+            <button class="btn btn-secondary btn-sm" id="cur-try-fetch-btn" onclick="fetchAutoTryRate()" style="white-space:nowrap;">🔄 جلب</button>
+          </div>
+          <div id="cur-try-rate-meta" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;"></div>
         </div>
         <button class="btn btn-primary" onclick="applyCurrencySettings()">حفظ وتطبيق</button>
       </div>

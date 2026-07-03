@@ -1,0 +1,32 @@
+# ===================================================
+#  robots.txt — أعمالي (نظام ERP ومحاسبة سحابي)
+#  يسمح بأرشفة الصفحات العامة ويحمي صفحات النظام الداخلية
+# ===================================================
+
+User-agent: *
+
+# --- السماح بالصفحات العامة القابلة للأرشفة ---
+Allow: /$
+Allow: /index.html
+Allow: /login.html
+Allow: /privacy.html
+Allow: /terms.html
+
+# --- السماح بملفات الأنماط والسكربتات الضرورية للعرض (Rendering) ---
+Allow: /css/
+Allow: /js/
+Allow: /assets/
+
+# --- منع صفحات النظام الداخلية المحمية (حماية بيانات العملاء) ---
+Disallow: /dashboard.html
+Disallow: /cashier.html
+
+# --- منع صفحة الخطأ من الأرشفة ---
+Disallow: /404.html
+
+# --- منع ملفات الإعدادات والقواعد الحساسة ---
+Disallow: /firestore.rules
+Disallow: /js/config.js
+
+# --- خريطة الموقع ---
+Sitemap: https://a3mali.com/sitemap.xml

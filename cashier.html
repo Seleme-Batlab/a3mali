@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="shortcut icon" type="image/png" href="assets/a3malilogo.png" />
+  <link rel="apple-touch-icon" href="assets/a3malilogo.png" />
   <title>نقطة البيع — أعمالي POS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -90,40 +93,24 @@
 
 <div id="loading-overlay" class="active"><div class="spinner"></div></div>
 <div id="toast-container"></div>
-<div id="offline-banner">📶 غير متصل — يتم الحفظ محلياً وستتم المزامنة تلقائياً عند عودة الإنترنت</div>
+<div id="offline-banner">
+  <div class="offline-popup-inner">
+    <div class="offline-popup-icon">📶</div>
+    <div class="offline-popup-msg">غير متصل<br><span>يتم الحفظ محلياً — ستتم المزامنة تلقائياً عند عودة الإنترنت</span></div>
+    <div class="offline-popup-ring">
+      <div class="offline-popup-spin"></div>
+      <div class="offline-popup-count" id="offline-countdown">5</div>
+    </div>
+  </div>
+</div>
 
 <!-- ===========================
      LOGIN LOCK SCREEN
 =========================== -->
 <!-- STAGE 1: account login (email + password → Firebase auth) -->
-<div id="account-lock">
-  <div class="pos-lock-card">
-    <div class="pos-lock-brand">
-      <div class="pos-lock-logo">ع</div>
-      <div>
-        <div class="pos-lock-title">أعمالي POS</div>
-        <div class="pos-lock-sub">تسجيل الدخول إلى حساب الشركة</div>
-      </div>
-    </div>
-
-    <div class="pos-lock-form">
-      <div class="form-group">
-        <label class="form-label">البريد الإلكتروني</label>
-        <input type="email" id="acct-email" class="form-input" dir="ltr" placeholder="you@company.com" autocomplete="username"
-          onkeydown="if(event.key==='Enter')document.getElementById('acct-password').focus()" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">كلمة المرور</label>
-        <input type="password" id="acct-password" class="form-input" dir="ltr" placeholder="••••••" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter')accountLogin()" />
-      </div>
-      <div id="acct-error" class="pos-lock-error">البريد الإلكتروني أو كلمة المرور غير صحيحة</div>
-      <button class="btn btn-primary pos-lock-btn" id="acct-login-btn" onclick="accountLogin()">🔓 دخول الحساب</button>
-    </div>
-
-    <a href="dashboard.html" class="pos-lock-back">← العودة إلى لوحة التحكم</a>
-  </div>
-</div>
+<!-- STAGE 1 (company account login) removed — an unauthenticated visit to
+     cashier.html now redirects straight to login.html (see __onAccountSignedOut).
+     When the account IS signed in we jump directly to the employee login below. -->
 
 <!-- STAGE 2: cashier (employee) login -->
 <div id="pos-lock" style="display:none;">
@@ -138,9 +125,11 @@
 
     <div class="pos-lock-form">
       <div class="form-group">
-        <label class="form-label">اسم المستخدم</label>
-        <input type="text" id="login-username" class="form-input" dir="ltr" placeholder="username" autocomplete="off"
-          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
+        <label class="form-label">اسم الموظف</label>
+        <select id="login-username" class="form-input"
+          onchange="document.getElementById('login-password').focus()">
+          <option value="">— اختر الموظف —</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">كلمة المرور</label>
@@ -153,7 +142,7 @@
 
     <div class="pos-lock-chips" id="login-chips"></div>
 
-    <button type="button" class="pos-lock-back" onclick="accountSignOut()" style="background:none;border:none;cursor:pointer;">↩ تسجيل خروج الحساب</button>
+    <button type="button" class="pos-lock-back" onclick="window.location.href='dashboard.html'" style="background:none;border:none;cursor:pointer;">↩ رجوع للصفحة الرئيسية</button>
   </div>
 </div>
 
@@ -292,9 +281,11 @@
           <div style="display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0 var(--sp-1);">
             <span style="font-size:var(--text-xs);color:var(--text-muted);flex:1;">عملة الدفع</span>
             <button class="btn btn-ghost btn-sm pay-cur-btn" id="pc-syp" onclick="selectPayCurrency('SYP')"
-              style="padding:2px 12px;font-size:var(--text-xs);border:1px solid var(--border);">ل.س</button>
+              style="padding:2px 10px;font-size:var(--text-xs);border:1px solid var(--border);">ل.س</button>
             <button class="btn btn-ghost btn-sm pay-cur-btn" id="pc-usd" onclick="selectPayCurrency('USD')"
-              style="padding:2px 12px;font-size:var(--text-xs);border:1px solid var(--border);">$</button>
+              style="padding:2px 10px;font-size:var(--text-xs);border:1px solid var(--border);">$</button>
+            <button class="btn btn-ghost btn-sm pay-cur-btn" id="pc-try" onclick="selectPayCurrency('TRY')"
+              style="padding:2px 10px;font-size:var(--text-xs);border:1px solid var(--border);">₺</button>
           </div>
         </div>
 
@@ -450,7 +441,12 @@
           <input type="number" class="form-input" id="svc-price" placeholder="0" min="0" step="any" style="flex:1;" />
           <button class="svc-cur-btn active" id="svc-cur-syp" onclick="selectSvcCur('SYP')">ل.س</button>
           <button class="svc-cur-btn" id="svc-cur-usd" onclick="selectSvcCur('USD')">$</button>
+          <button class="svc-cur-btn" id="svc-cur-try" onclick="selectSvcCur('TRY')">₺</button>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">سعر التكلفة <span style="color:var(--text-muted);font-weight:400;">(اختياري)</span></label>
+        <input type="number" class="form-input" id="svc-cost" placeholder="0" min="0" step="any" value="0" />
       </div>
       <div class="form-group">
         <label class="form-label">ملاحظة (اختياري)</label>
@@ -598,9 +594,10 @@
      at accounts/{acct}/data/{kind} (same layout as the dashboard).
 =========================================================== -->
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { initializeApp, setLogLevel } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  setLogLevel('error'); // suppress noisy offline WebChannel warnings
 
   function _acctKey() {
     let u = {};
@@ -632,6 +629,7 @@
 
   // Pull every shared store from Firestore and merge into localStorage.
   async function _fsHydrate(db, acctKey) {
+    if (!navigator.onLine) return; // skip all Firestore fetches when offline — use local cache
     for (const kind of ARRAY_STORES) {
       try {
         const snap = await getDoc(doc(db, 'accounts/' + acctKey + '/data/' + kind));
@@ -721,28 +719,6 @@
         if (typeof window.__onAccountSignedOut === 'function') window.__onAccountSignedOut();
       }
     });
-
-    // STAGE 1 action: sign in with email + password.
-    window.accountLogin = async function() {
-      const email = (document.getElementById('acct-email').value || '').trim();
-      const pass  = (document.getElementById('acct-password').value || '');
-      const err   = document.getElementById('acct-error');
-      const btn   = document.getElementById('acct-login-btn');
-      if (err) err.style.display = 'none';
-      if (!email || !pass) {
-        if (err) { err.textContent = 'أدخل البريد الإلكتروني وكلمة المرور'; err.style.display = 'block'; }
-        return;
-      }
-      if (btn) { btn.disabled = true; btn.textContent = 'جارٍ الدخول...'; }
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-        // onAuthStateChanged() takes over from here (hydrate + show cashier login).
-      } catch(e) {
-        if (err) { err.textContent = 'البريد الإلكتروني أو كلمة المرور غير صحيحة'; err.style.display = 'block'; }
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '🔓 دخول الحساب'; }
-      }
-    };
 
     window.accountSignOut = async function() {
       try { await signOut(auth); } catch(e) {}
@@ -873,7 +849,7 @@ function fmt(amount) {
     : (Number(amount) || 0);
   const digits = window.Currency ? window.Currency.digits(cashCur) : (cashCur === 'USD' ? 2 : 0);
   const sym    = window.Currency ? window.Currency.symbol(cashCur) : (cashCur === 'USD' ? '$' : 'ل.س');
-  return val.toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+  return val.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
 }
 function baseCur() {
   return (window._appSettings && window._appSettings.cashierCurrency)
@@ -901,7 +877,7 @@ function fmtSaleTotal(sale) {
     const d   = window.Currency ? window.Currency.digits(cur) : (cur === 'USD' ? 2 : 0);
     const sym = window.Currency ? window.Currency.symbol(cur) : (cur === 'USD' ? '$' : 'ل.س');
     return (Number(sale.paymentAmount) || 0)
-      .toLocaleString('ar-SY', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + sym;
+      .toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + sym;
   }
   return fmt(sale ? sale.total : 0);
 }
@@ -914,7 +890,7 @@ function fmtPay(amount) {
     : (Number(amount) || 0);
   const digits = window.Currency ? window.Currency.digits(to) : (to === 'USD' ? 2 : 0);
   const sym    = window.Currency ? window.Currency.symbol(to) : (to === 'USD' ? '$' : 'ل.س');
-  return val.toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+  return val.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
 }
 
 // Grand total as a raw number in payCur()
@@ -941,7 +917,8 @@ function selectPayCurrency(cur) {
   if (btn) btn.classList.add('active');
   const cashEl = document.getElementById('cash-received');
   if (cashEl) {
-    cashEl.placeholder = cur === 'USD' ? 'المبلغ المستلم بالدولار...' : 'المبلغ المستلم بالليرة...';
+    const _phMap = { USD: 'المبلغ المستلم بالدولار...', TRY: 'المبلغ المستلم بالليرة التركية...', SYP: 'المبلغ المستلم بالليرة السورية...' };
+    cashEl.placeholder = _phMap[cur] || 'المبلغ المستلم...';
     cashEl.value = '';
   }
   recalculate();
@@ -1013,8 +990,10 @@ function ownerPin() {
 }
 
 function renderLockChips() {
-  const wrap = document.getElementById('login-chips');
   const emps = getEmployees().filter(e => e.active !== false);
+  populateEmployeeSelect(emps);
+
+  const wrap = document.getElementById('login-chips');
   if (!emps.length) {
     wrap.innerHTML = '<div style="font-size:var(--text-xs);color:var(--text-muted);text-align:center;">لا يوجد موظفون بعد — أضِف موظفين من لوحة التحكم ← الموظفون.</div>';
     return;
@@ -1032,6 +1011,25 @@ function renderLockChips() {
       </button>`;
     }).join('');
 }
+
+// Fill the employee dropdown — one <option> per active employee (value = username,
+// label = name). Employees on leave are shown but disabled so they can't be picked.
+function populateEmployeeSelect(emps) {
+  const sel = document.getElementById('login-username');
+  if (!sel) return;
+  const prev = sel.value;
+  let html = '<option value="">— اختر الموظف —</option>';
+  (emps || []).forEach(e => {
+    const onLeave = empActiveLeave(e);
+    html += onLeave
+      ? `<option value="${e.username}" disabled>${e.name} — 🏖️ في إجازة</option>`
+      : `<option value="${e.username}">${e.name}</option>`;
+  });
+  sel.innerHTML = html;
+  // Keep the previously selected employee if still valid after a refresh
+  if (prev && sel.querySelector(`option[value="${prev}"]:not([disabled])`)) sel.value = prev;
+}
+
 function pickEmployee(username) {
   document.getElementById('login-username').value = username;
   document.getElementById('login-password').value = '';
@@ -1069,7 +1067,7 @@ function posLogin() {
   const p = (document.getElementById('login-password').value || '').trim();
   const err = document.getElementById('login-error');
   err.style.display = 'none';
-  if (!u || !p) { err.textContent = 'أدخل اسم المستخدم وكلمة المرور'; err.style.display = 'block'; return; }
+  if (!u || !p) { err.textContent = 'اختر الموظف وأدخل كلمة المرور'; err.style.display = 'block'; return; }
 
   // 1) Employee credentials
   const emp = getEmployees().find(e => (e.username||'').toLowerCase() === u.toLowerCase() && String(e.password) === p);
@@ -1328,13 +1326,16 @@ function clearCart() {
 // ============================================================
 function selectSvcCur(cur) {
   _svcCurrency = cur;
-  document.getElementById('svc-cur-syp').classList.toggle('active', cur === 'SYP');
-  document.getElementById('svc-cur-usd').classList.toggle('active', cur === 'USD');
+  ['SYP','USD','TRY'].forEach(c => {
+    const btn = document.getElementById('svc-cur-' + c.toLowerCase());
+    if (btn) btn.classList.toggle('active', c === cur);
+  });
 }
 
 function openServiceModal() {
   document.getElementById('svc-name').value  = '';
   document.getElementById('svc-price').value = '';
+  document.getElementById('svc-cost').value  = '0';
   document.getElementById('svc-notes').value = '';
   _svcCurrency = 'SYP';
   selectSvcCur('SYP');
@@ -1345,15 +1346,19 @@ function openServiceModal() {
 function addService() {
   const name  = (document.getElementById('svc-name').value  || '').trim();
   const price = parseFloat(document.getElementById('svc-price').value) || 0;
+  const cost  = Math.max(0, parseFloat(document.getElementById('svc-cost').value) || 0);
   const notes = (document.getElementById('svc-notes').value || '').trim();
   if (!name)    { showToast('error', 'أدخل اسم الخدمة'); return; }
   if (price <= 0) { showToast('error', 'أدخل سعر الخدمة'); return; }
 
-  // Convert service price to cashier base currency for cart total
+  // Convert service price & cost to cashier base currency for cart total
   const baseCurrency = baseCur();
   const priceInBase  = (window.Currency && _svcCurrency !== baseCurrency)
     ? window.Currency.convert(price, _svcCurrency, baseCurrency)
     : price;
+  const costInBase   = (window.Currency && _svcCurrency !== baseCurrency)
+    ? window.Currency.convert(cost, _svcCurrency, baseCurrency)
+    : cost;
 
   const svcId = 'svc-' + Date.now();
   cart.push({
@@ -1365,7 +1370,8 @@ function addService() {
     emoji:                '⚙️',
     qty:                  1,
     type:                 'service',
-    cost:                 0,
+    cost:                 costInBase,         // تكلفة الخدمة بالعملة الأساسية (0 = ربح 100%)
+    costCurrency:         baseCurrency,
     notes:                notes,
   });
 
@@ -1437,9 +1443,10 @@ function renderCart() {
     // For services: show original-currency label if it differs from base
     const svcLabel = isSvc && item.serviceCurrency && item.servicePriceDisplay != null
       ? (() => {
-          const sym = item.serviceCurrency === 'USD' ? '$' : 'ل.س';
-          const digits = item.serviceCurrency === 'USD' ? 2 : 0;
-          const orig = Number(item.servicePriceDisplay).toLocaleString('ar-SY', {minimumFractionDigits:digits, maximumFractionDigits:digits});
+          const sc  = item.serviceCurrency;
+          const sym = window.Currency ? window.Currency.symbol(sc) : (sc === 'USD' ? '$' : sc === 'TRY' ? '₺' : 'ل.س');
+          const digits = window.Currency ? window.Currency.digits(sc) : (sc === 'SYP' ? 0 : 2);
+          const orig = Number(item.servicePriceDisplay).toLocaleString('en-US', {minimumFractionDigits:digits, maximumFractionDigits:digits});
           return `<div class="svc-cur-label">${orig} ${sym}</div>`;
         })()
       : '';
@@ -1530,7 +1537,7 @@ function closeMobileCart() {
 
 function calcChange() {
   const cur      = payCur();
-  const digits   = cur === 'USD' ? 2 : 0;
+  const digits   = window.Currency ? window.Currency.digits(cur) : (cur === 'SYP' ? 0 : 2);
   const factor   = Math.pow(10, digits);
   // Round both to the payment-currency precision so floating-point conversion
   // noise (e.g. a stored price of 10125.0001) doesn't show a fake shortfall.
@@ -1538,7 +1545,7 @@ function calcChange() {
   const received = Math.round((parseFloat(document.getElementById('cash-received').value) || 0) * factor) / factor;
   const change   = received - grand;
   const sym      = window.Currency ? window.Currency.symbol(cur) : (cur === 'USD' ? '$' : 'ل.س');
-  const str      = Math.abs(change).toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+  const str      = Math.abs(change).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
   const el       = document.getElementById('change-display');
   el.textContent = change >= 0 && received > 0 ? str : '—';
   el.style.color = change >= 0 ? 'var(--success)' : 'var(--danger)';
@@ -1547,7 +1554,7 @@ function calcChange() {
 function setExactCash() {
   const grand = grandInPayCur();
   if (grand <= 0) return;
-  const digits = payCur() === 'USD' ? 2 : 0;
+  const digits = window.Currency ? window.Currency.digits(payCur()) : (payCur() === 'SYP' ? 0 : 2);
   document.getElementById('cash-received').value = parseFloat(grand.toFixed(digits));
   calcChange();
 }
@@ -1679,7 +1686,7 @@ async function checkout() {
   if (selectedPayment === 'cash') {
     const cashEl   = document.getElementById('cash-received');
     const received = parseFloat(cashEl.value) || 0;
-    const digits   = payCur() === 'USD' ? 2 : 0;
+    const digits   = window.Currency ? window.Currency.digits(payCur()) : (payCur() === 'SYP' ? 0 : 2);
     const factor   = Math.pow(10, digits);
     // Round both to payment-currency precision so floating-point conversion
     // noise (e.g. a stored price of 10125.0001) doesn't fake a shortfall.
@@ -1713,7 +1720,8 @@ async function checkout() {
           price:                i.price,
           qty:                  i.qty,
           total:                i.price * i.qty,
-          cost:                 0,
+          cost:                 i.cost || 0,
+          costCurrency:         i.costCurrency || baseCur(),
           type:                 'service',
           serviceCurrency:      i.serviceCurrency || baseCur(),
           servicePriceDisplay:  i.servicePriceDisplay,
@@ -1891,7 +1899,7 @@ function buildReceiptHTML(sale) {
   return `
     <div class="receipt-header">
       <div class="receipt-logo">${shopName()}</div>
-      <div class="receipt-sub">${ts ? new Date(ts).toLocaleString('ar-SY') : ''}</div>
+      <div class="receipt-sub">${ts ? new Date(ts).toLocaleString('en-US') : ''}</div>
       <div class="receipt-sub">الكاشير: ${sale.cashier || '—'}</div>
     </div>
     <div class="receipt-items">
@@ -1902,9 +1910,10 @@ function buildReceiptHTML(sale) {
         const isSvc = i.type === 'service';
         let priceLabel = fmt(i.total);
         if (isSvc && i.servicePriceDisplay != null && i.serviceCurrency) {
-          const sym    = i.serviceCurrency === 'USD' ? '$' : 'ل.س';
-          const digits = i.serviceCurrency === 'USD' ? 2 : 0;
-          const orig   = Number(i.servicePriceDisplay * i.qty).toLocaleString('ar-SY', {minimumFractionDigits:digits,maximumFractionDigits:digits});
+          const sc     = i.serviceCurrency;
+          const sym    = window.Currency ? window.Currency.symbol(sc) : (sc === 'USD' ? '$' : sc === 'TRY' ? '₺' : 'ل.س');
+          const digits = window.Currency ? window.Currency.digits(sc) : (sc === 'SYP' ? 0 : 2);
+          const orig   = Number(i.servicePriceDisplay * i.qty).toLocaleString('en-US', {minimumFractionDigits:digits,maximumFractionDigits:digits});
           priceLabel   = `${orig} ${sym}`;
         }
         return `
@@ -2118,7 +2127,7 @@ function exportSessionReport() {
   if (!sales.length) { showToast('warning', 'لا توجد مبيعات للتصدير'); return; }
   const bom = '\uFEFF';
   const rows = [['رقم الفاتورة','العميل','المبلغ','الدفع','الوقت']]
-    .concat(sales.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp || s.createdAt).toLocaleString('ar-SY')]));
+    .concat(sales.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp || s.createdAt).toLocaleString('en-US')]));
   const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -2209,7 +2218,7 @@ function renderMySales(list) {
       <td>${s.client||'—'}</td>
       <td style="font-weight:700;">${fmtSaleTotal(s)}</td>
       <td>${fmtMethodCur(s)}</td>
-      <td style="color:var(--text-muted);">${new Date(s.timestamp||s.createdAt).toLocaleString('ar-SY')}</td>
+      <td style="color:var(--text-muted);">${new Date(s.timestamp||s.createdAt).toLocaleString('en-US')}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد مبيعات مسجلة باسمك بعد</td></tr>';
 }
 function filterMySales(q) {
@@ -2220,7 +2229,7 @@ function exportMySales() {
   if (!exp.length) { showToast('warning', 'لا توجد مبيعات للتصدير'); return; }
   const bom = '\uFEFF';
   const rows = [['رقم الفاتورة','العميل','المبلغ','الدفع','التاريخ']]
-    .concat(exp.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp||s.createdAt).toLocaleString('ar-SY')]));
+    .concat(exp.map(s => [s.id, s.client, s.total, s.method, new Date(s.timestamp||s.createdAt).toLocaleString('en-US')]));
   const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -2265,7 +2274,7 @@ function renderInvoicesList(list) {
       <td>${s.client || '—'}</td>
       <td style="font-weight:700;">${fmtSaleTotal(s)}</td>
       <td>${fmtMethodCur(s)}</td>
-      <td style="color:var(--text-muted);">${new Date(s.timestamp || s.createdAt).toLocaleString('ar-SY')}</td>
+      <td style="color:var(--text-muted);">${new Date(s.timestamp || s.createdAt).toLocaleString('en-US')}</td>
       <td style="text-align:center;"><button class="btn btn-ghost btn-sm" onclick="printInvoiceById('${s.id}')" title="طباعة الفاتورة">🖨️</button></td>
     </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد فواتير بعد</td></tr>';
 }
@@ -2383,12 +2392,16 @@ window.__onAccountAuthed = function() {
   }
 };
 
-// Called when no company account is signed in → show the account-login screen.
+// Called when no company account is signed in → there's no in-page account
+// login anymore, so send the visitor straight to the main login page.
+// Exception: if we're offline and there's a cached session, use it locally
+// instead of redirecting (Firebase Auth can't refresh the token offline).
 window.__onAccountSignedOut = function() {
-  document.getElementById('pos-shell').style.display = 'none';
-  document.getElementById('pos-lock').style.display  = 'none';
-  const al = document.getElementById('account-lock'); if (al) al.style.display = 'flex';
-  const e = document.getElementById('acct-email'); if (e) e.focus();
+  if (!navigator.onLine && sessionStorage.getItem('a3mali_user')) {
+    if (typeof window.__onAccountAuthed === 'function') window.__onAccountAuthed();
+    return;
+  }
+  window.location.replace('login.html');
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2401,9 +2414,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Offline indicators
   const banner = document.getElementById('offline-banner');
-  window.addEventListener('online',  () => { banner.classList.remove('show'); refreshSyncPill(); showToast('success', 'عاد الاتصال — جارٍ المزامنة...'); });
-  window.addEventListener('offline', () => { banner.classList.add('show'); refreshSyncPill(); });
-  if (!navigator.onLine) banner.classList.add('show');
+  window.addEventListener('online',  async () => {
+    banner.classList.remove('show');
+    refreshSyncPill();
+    showToast('success', 'عاد الاتصال — جارٍ مزامنة البيانات مع Firebase...');
+    // Wait 2 s for Firebase to re-establish its WebSocket before flushing the queue.
+    await new Promise(r => setTimeout(r, 2000));
+    if (typeof OfflineDB !== 'undefined' && typeof OfflineDB.syncAll === 'function') {
+      OfflineDB.syncAll();
+    }
+  });
+  function showOfflinePopup() {
+    banner.classList.add('show');
+    refreshSyncPill();
+    let n = 5;
+    const el = document.getElementById('offline-countdown');
+    if (el) el.textContent = n;
+    clearInterval(window._offlineCountdown);
+    window._offlineCountdown = setInterval(() => {
+      n--;
+      if (el) {
+        el.textContent = n;
+        el.style.transform = 'scale(1.3)';
+        setTimeout(() => { el.style.transform = 'scale(1)'; }, 180);
+      }
+      if (n <= 0) {
+        clearInterval(window._offlineCountdown);
+        banner.classList.remove('show');
+      }
+    }, 1000);
+  }
+  window.addEventListener('offline', showOfflinePopup);
+  if (!navigator.onLine) showOfflinePopup();
 
   // Which screen shows (account login → cashier login → POS) is driven by the
   // Firebase auth state via __onAccountAuthed / __onAccountSignedOut below.
