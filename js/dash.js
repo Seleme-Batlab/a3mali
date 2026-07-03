@@ -1,19 +1,5 @@
-// ============================================================
 //  أعمالي ERP — Dashboard Logic (classic script)
-//  All render functions, navigation, helpers & global UI funcs
-//  Extracted from dashboard.html (was inline <script>)
-//  NOTE: loaded as a CLASSIC script so top-level function
-//  declarations stay global for inline onclick/oninput handlers.
-// ============================================================
 
-  // ===========================
-  // NAVIGATION & UI
-  // ===========================
-
-  // ===========================
-  // PER-ACCOUNT STORAGE
-  // Each logged-in account keeps its own data, scoped by uid/email.
-  // ===========================
   function _acctKey() {
     let u = {};
     try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
@@ -28,7 +14,6 @@
   function _saveAcct(kind, value) {
     try { localStorage.setItem('a3mali_' + kind + '_' + _acctKey(), JSON.stringify(value)); } catch(e) {}
   }
-  // ── Firestore async dual-write helper ──
   function _fsSync(kind, data) {
     if (!window._fsSet) return;
     const payload = Array.isArray(data)
@@ -64,11 +49,6 @@
     };
     Object.entries(stores).forEach(([k, v]) => {
       _saveAcct(k, v);
-      // 'invoices' lives in its own Firestore collection now (one document
-      // per invoice — see saveInvoice() below), not this single-array doc.
-      // Pushing the whole array here is exactly the pattern that caused the
-      // earlier data-loss bug (a stale client overwriting invoices it
-      // didn't know about), so it's deliberately skipped for this key.
       if (k === 'invoices') return;
       _fsSync(k, v);
     });
@@ -89,9 +69,6 @@
     _fsSync('settings', s);
   };
 
-  // ===========================
-  // GLOBAL DATA STORE (loaded per account — starts empty for new accounts)
-  // ===========================
   window._invoices    = _loadAcct('invoices',  []);
   window._customers   = _loadAcct('customers', []);
   window._products    = _loadAcct('products',  []);
@@ -113,10 +90,6 @@
   window._entries     = _loadAcct('entries',     []);   // قيود محاسبية يدوية
   window._appSettings = _loadAcct('settings',    {});
 
-  // ===========================
-  // LIVE SYNC (called by dash-boot.js when Firestore pushes new data,
-  // e.g. a sale made from the cashier screen — no manual refresh needed)
-  // ===========================
   const _liveSyncProp = {
     invoices: '_invoices', products: '_products', customers: '_customers',
     debts: '_debts', stockMoves: '_stockMoves', cashbox: '_cashbox',
@@ -129,23 +102,16 @@
     if (typeof window.updateSalesBadge === 'function') window.updateSalesBadge();
     if (typeof window.updateNotifBadge === 'function') window.updateNotifBadge();
 
-    // Brief pulse on the header sync dot so the update feels "live"
     document.querySelectorAll('.sync-indicator').forEach(el => el.classList.add('syncing'));
     setTimeout(() => document.querySelectorAll('.sync-indicator').forEach(el => el.classList.remove('syncing')), 1200);
 
-    // Don't yank the screen from under an admin mid-form / mid-typing
     const active = document.activeElement;
     const isTyping = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
     if (document.querySelector('.modal-overlay.open') || isTyping) return;
 
-    // Re-render whatever module is currently open so its tables/KPIs pick up the new data
     const current = (window.location.hash || '#dashboard').replace('#', '');
     if (typeof window.navigate === 'function') window.navigate(current);
 
-    // Safe to report adds/edits/deletes accurately for invoices now: they sync
-    // per-document via a real Firestore collection (see dash-boot.js), so a
-    // shrinking count here means a document was actually deleted — not a
-    // stale whole-array overwrite like before.
     if (kind === 'invoices') {
       if (merged.length > prevCount)      showToast('success', '🔄 مزامنة تلقائية — تمت إضافة عملية بيع جديدة');
       else if (merged.length < prevCount) showToast('info',    '🔄 مزامنة تلقائية — تم حذف فاتورة');
@@ -153,9 +119,6 @@
     }
   };
 
-  // ===========================
-  // PDF / PRINT HELPER
-  // ===========================
   window.generatePDF = function(title, bodyHTML) {
     const s = window._appSettings || {};
     const win = window.open('', '_blank', 'width=900,height=700');
@@ -206,11 +169,8 @@ ${bodyHTML}
     setTimeout(() => { win.print(); }, 700);
   };
 
-  // ===========================
-  // EXPORT CSV
-  // ===========================
   window.exportToCSV = function(rows, filename) {
-    const bom = '\uFEFF'; // UTF-8 BOM for Arabic in Excel
+    const bom = '\uFEFF';
     const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -219,18 +179,14 @@ ${bodyHTML}
   };
 
   window.navigate = async function(module) {
-    // Update URL hash
     window.location.hash = module;
 
-    // Update sidebar active state
     document.querySelectorAll('.sidebar-item').forEach(el => {
       el.classList.toggle('active', el.dataset.module === module);
     });
 
-    // Expand the accordion group of the active module (collapses the others)
     openGroupForModule(module);
 
-    // Show loading in content area
     const content = document.getElementById('content');
     content.innerHTML = `
       <div class="empty-state">
@@ -263,11 +219,9 @@ ${bodyHTML}
       content.classList.add('animate-fade');
       setTimeout(() => content.classList.remove('animate-fade'), 500);
 
-      // On phones/tablets, auto-close the off-canvas sidebar and reset scroll
       if (window.innerWidth <= 1024) closeMobileSidebar();
       content.scrollTop = 0;
 
-      // Initialize module-specific events
       if (typeof window[`init_${module}`] === 'function') {
         window[`init_${module}`]();
       }
@@ -284,42 +238,24 @@ ${bodyHTML}
     }
   };
 
-  // ===========================
-  // MODULE RENDERERS
-  // ===========================
-
   async function renderDashboard() {
     const today = new Date().toISOString().slice(0,10);
     const invs  = (window._invoices || []);
-    const totalSales = (typeof _sumBase === 'function') ? _sumBase(invs) : 0;
-    // Compact Arabic wording: 1000 → "١ ألف"، 1400000 → "١ مليون و ٤٠٠ ألف".
-    const _compactAr = (n) => {
-      n = Math.round(Number(n) || 0);
-      if (n === 0) return '٠';
-      const millions = Math.floor(n / 1e6);
-      const thousands = Math.floor((n % 1e6) / 1e3);
-      const rest = n % 1e3;
-      const parts = [];
-      if (millions)  parts.push(millions.toLocaleString('ar-SY') + ' مليون');
-      if (thousands) parts.push(thousands.toLocaleString('ar-SY') + ' ألف');
-      if (rest)      parts.push(rest.toLocaleString('ar-SY'));
-      return parts.join(' و ');
-    };
-    const _baseSym = window.Currency ? window.Currency.symbol(window.Currency.base) : 'ل.س';
-    const totalSalesFmt = _compactAr(totalSales) + ' ' + _baseSym;
+    const totalSalesRaw = (typeof _sumBase === 'function') ? _sumBase(invs) : 0;
+    const totalSvcRev   = (typeof _serviceRevenueBase === 'function') ? _serviceRevenueBase(invs) : 0;
+    const totalSales    = totalSalesRaw - totalSvcRev;   // مبيعات المنتجات فقط (بدون الخدمات)
+    const totalSalesFmt = window.Currency
+      ? window.Currency.formatCompact(totalSales, window.Currency.base)
+      : (Math.round(totalSales)).toLocaleString('en-US') + ' ل.س';
 
-    // --- Live KPI values ---
     const now = new Date();
     const realInvs = invs.filter(inv => inv && inv.status !== 'draft' && inv.status !== 'quotation');
-    // Invoices dated today
     const invoicesToday = realInvs.filter(inv => {
       if (!inv.date) return false;
       const d = new Date(String(inv.date).replace(/\//g,'-'));
       return !isNaN(d) && d.toDateString() === now.toDateString();
     }).length;
-    // Out-of-stock products
     const outOfStock = (window._products || []).filter(p => (Number(p.stock) || 0) <= 0).length;
-    // New customers this month (customer date is a localized ar-SY string: day/month/year)
     const _parseArDate = (s) => {
       if (!s) return null;
       const en = String(s)
@@ -532,22 +468,18 @@ ${bodyHTML}
     `).join('');
   }
 
-  // Build TODAY's activity feed from the live data (invoices, expenses,
-  // cashbox, purchases, new customers). Only events dated today are shown,
-  // newest first.
   function generateRecentActivity() {
     const todayStr = new Date().toDateString();
     const norm = (s) => String(s)
       .replace(/[\u0660-\u0669]/g, c => c.charCodeAt(0) - 0x0660)
       .replace(/[\u06F0-\u06F9]/g, c => c.charCodeAt(0) - 0x06F0)
       .replace(/[\u200e\u200f]/g, '').trim();
-    // Returns { ts, hasTime }: a millisecond timestamp + whether a real clock time is known.
     const tsOf = (rec) => {
       if (rec.createdAt != null) { const d = new Date(rec.createdAt); if (!isNaN(d)) return { ts: d.getTime(), hasTime: true }; }
       if (rec.timestamp != null) { const d = new Date(rec.timestamp); if (!isNaN(d)) return { ts: d.getTime(), hasTime: true }; }
       if (rec.date) {
         const ds = norm(rec.date);
-        let d = new Date(ds.replace(/\//g, '-'));
+        let d = new Date(ds.replace(/\//g,'-'));
         if (!isNaN(d)) return { ts: d.getTime(), hasTime: false };
         const p = ds.split(/[\/\-]/).map(Number);
         if (p.length === 3) { d = new Date(p[2], p[1] - 1, p[0]); if (!isNaN(d)) return { ts: d.getTime(), hasTime: false }; }
@@ -555,8 +487,8 @@ ${bodyHTML}
       return { ts: 0, hasTime: false };
     };
     const money = (a, c) => window.Currency
-      ? window.Currency.format(a, c || 'SYP')
-      : (Number(a) || 0).toLocaleString('ar-SY') + ' ل.س';
+      ? window.Currency.formatCompact(a, c || 'SYP')
+      : (Number(a) || 0).toLocaleString('en-US') + ' ل.س';
 
     const ev = [];
     (window._invoices || []).forEach(r => {
@@ -607,9 +539,6 @@ ${bodyHTML}
       </div>`).join('');
   }
 
-  // ===========================
-  // CRM MODULE
-  // ===========================
   async function renderCRM() {
     return `
     <div class="module-wrap">
@@ -754,10 +683,6 @@ ${bodyHTML}
     set('crm-kpi-vip', vip);
   };
 
-  // ===========================
-  // ===========================
-  // INSTALLMENTS MODULE
-  // ===========================
   async function renderInstallments() {
     return `
     <div class="module-wrap">
@@ -904,9 +829,6 @@ ${bodyHTML}
     `;
   }
 
-  // ===========================
-  // COMMISSIONS MODULE
-  // ===========================
   async function renderCommissions() {
     return `
     <div class="module-wrap">
@@ -1128,8 +1050,6 @@ ${bodyHTML}
     `;
   }
 
-  // SALES MODULE
-  // ===========================
   async function renderSales() {
     return `
     <div class="module-wrap">
@@ -1165,6 +1085,11 @@ ${bodyHTML}
           <input class="search-input" type="text" placeholder="بحث برقم الفاتورة أو اسم العميل..." oninput="filterInvoices(this.value)" />
           <span class="search-icon">🔍</span>
         </div>
+        <select class="form-select" style="width:auto;height:38px;" title="نوع الفاتورة" id="inv-type-filter" onchange="filterInvoicesByType(this.value)">
+          <option value="all">الكل</option>
+          <option value="sales">🛒 مبيعات</option>
+          <option value="services">⚙️ خدمات</option>
+        </select>
         <select class="form-select" style="width:auto;height:38px;" title="تصفية حسب الموظف/البائع" onchange="filterInvoicesByEmployee(this.value)">
           ${invoiceEmployeeOptions()}
         </select>
@@ -1331,7 +1256,6 @@ ${bodyHTML}
     `;
   }
 
-  // Display name of who created an invoice: POS sales carry `cashier`; others are office/system.
   function invoiceSeller(r) {
     if (r.cashier) return r.cashier;
     return r.source === 'pos' ? 'كاشير' : 'المكتب';
@@ -1348,9 +1272,11 @@ ${bodyHTML}
       const seller = invoiceSeller(r);
       const sellerKey = (r.cashierUser || r.cashier || (r.source === 'pos' ? 'pos' : 'office'));
       const isPos = r.source === 'pos';
+      const hasSvc  = (r.items || []).some(it => it.type === 'service');
+      const invType = hasSvc ? 'service' : 'sales';
       return `
-      <tr data-inv-status="${r.status}" data-inv-seller="${String(sellerKey).toLowerCase()}">
-        <td><span style="font-weight:700;color:var(--primary);">${r.id}</span></td>
+      <tr data-inv-status="${r.status}" data-inv-seller="${String(sellerKey).toLowerCase()}" data-inv-type="${invType}">
+        <td><span style="font-weight:700;color:var(--primary);">${r.id}</span>${hasSvc ? ' <span class="badge badge-info" style="font-size:10px;">⚙️ خدمة</span>' : ''}</td>
         <td>${r.client}</td>
         <td style="font-weight:800;">${_fmtInvAmount(r)}</td>
         <td><span class="pill">${_fmtMethodCur(r)}</span></td>
@@ -1368,9 +1294,8 @@ ${bodyHTML}
     }).join('');
   }
 
-  // Build the <option> list for the seller/employee filter from actual invoice data.
   function invoiceEmployeeOptions() {
-    const map = {};  // key -> label
+    const map = {};
     (window._invoices || []).forEach(r => {
       const key = (r.cashierUser || r.cashier || (r.source === 'pos' ? 'pos' : 'office'));
       const label = invoiceSeller(r);
@@ -1381,9 +1306,6 @@ ${bodyHTML}
     return opts;
   }
 
-  // ===========================
-  // INVENTORY MODULE
-  // ===========================
   async function renderInventory() {
     const _PEM = ['📦','🏷️','⭐','💎','🎁','🛒','💰','🔑','🍔','🍕','🍜','🍱','🥤','☕','🧃','🥛','🍫','🍰','🥗','🍞','🥩','🥦','🍎','🧄','🫒','🧁','🍦','🍩','📱','💻','🖨️','⌨️','📷','📺','🎮','🔋','💡','🔌','🖱️','🎧','👔','👗','👟','🧥','🎒','👜','🧢','💍','⌚','👞','👒','📝','📚','📎','✏️','🖊️','📐','📏','🗂️','💊','🩺','🧴','🧼','💄','🪥','🩹','💅','🛋️','🔧','🔨','⚙️','🪣','🔩','🪚','🪛','⚽','🏀','🎾','🏈','🎲','🧸','🎯','🚗','🛻','🚌','🛵','🌿','🌸','🪴','🧊','🫙','🏺','🎨','🖼️','🧩','📦'];
     const _emojiGrid = (w) => _PEM.map(e => `<button type="button" onclick="pickProductEmoji('${w}','${e}')" style="font-size:1.35rem;background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;line-height:1;transition:.1s;" onmouseover="this.style.background='var(--surface-3,#f1f5f9)'" onmouseout="this.style.background='none'">${e}</button>`).join('');
@@ -1421,6 +1343,10 @@ ${bodyHTML}
                 <div style="font-size:var(--text-xs);color:var(--text-muted);">بالليرة السورية</div>
                 <div style="font-size:var(--text-2xl);font-weight:800;color:var(--primary);" id="inv-value-syp">0 ل.س</div>
               </div>
+              <div>
+                <div style="font-size:var(--text-xs);color:var(--text-muted);">بالليرة التركية</div>
+                <div style="font-size:var(--text-2xl);font-weight:800;color:var(--primary);" id="inv-value-try">0 ₺</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1440,6 +1366,10 @@ ${bodyHTML}
               <div>
                 <div style="font-size:var(--text-xs);color:var(--text-muted);">بالليرة السورية</div>
                 <div style="font-size:var(--text-2xl);font-weight:800;color:var(--success,#16a34a);" id="inv-sale-syp">0 ل.س</div>
+              </div>
+              <div>
+                <div style="font-size:var(--text-xs);color:var(--text-muted);">بالليرة التركية</div>
+                <div style="font-size:var(--text-2xl);font-weight:800;color:var(--success,#16a34a);" id="inv-sale-try">0 ₺</div>
               </div>
             </div>
           </div>
@@ -1556,6 +1486,7 @@ ${bodyHTML}
             <select class="form-select" id="prod-currency">
               <option value="SYP" selected>ليرة سورية (ل.س)</option>
               <option value="USD">دولار أمريكي ($)</option>
+              <option value="TRY">ليرة تركية (₺)</option>
             </select>
             <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">إذا اخترت الدولار، يُحوَّل السعر تلقائياً للعملة الأساسية في الكاشير والتقارير حسب سعر الصرف.</div>
           </div>
@@ -1616,6 +1547,7 @@ ${bodyHTML}
               <select class="form-select" id="edit-prod-currency">
                 <option value="SYP">ليرة سورية (ل.س)</option>
                 <option value="USD">دولار أمريكي ($)</option>
+                <option value="TRY">ليرة تركية (₺)</option>
               </select>
             </div>
           </div>
@@ -1685,12 +1617,10 @@ ${bodyHTML}
     `;
   }
 
-  // Effective minimum-stock threshold for a product (per-product, else global setting, else 5)
   function _prodMin(p) {
     const g = window._appSettings && window._appSettings.minStockAlert;
     return p.minStock != null ? Number(p.minStock) : (g != null ? Number(g) : 5);
   }
-
 
   function generateProductCards() {
     const list = (window._products || []);
@@ -1718,14 +1648,11 @@ ${bodyHTML}
     const costPrice = Number(p.cost) || 0;
     const profit    = sellPrice - costPrice;
     const margin    = sellPrice > 0 ? Math.round((profit / sellPrice) * 100) : 0;
-    // Currency.format() converts from the base currency to the target — so passing a
-    // USD amount (e.g. 10) with cur='USD' gives 10÷rate ≈ $0.009 instead of $10.
-    // For non-base currencies we bypass Currency.format and format directly.
     const _fmtDirect = (v, cur) => {
       if (!window.Currency || cur === base) return _fmt(v, base);
       const digits = typeof window.Currency.digits === 'function' ? window.Currency.digits(cur) : (cur === 'USD' ? 2 : 0);
       const sym    = typeof window.Currency.symbol === 'function' ? window.Currency.symbol(cur) : cur;
-      return (Number(v)||0).toLocaleString('ar-SY', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
+      return (Number(v)||0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
     };
     const profitColor = profit > 0 ? 'var(--success)' : (profit < 0 ? 'var(--danger)' : 'var(--text-muted)');
     const profitLine = `<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:var(--sp-1);font-size:var(--text-xs);">
@@ -1766,7 +1693,6 @@ ${bodyHTML}
     `;
   }
 
-  // ---- Inventory builders (movements / categories / options) ----
   function generateMovementRows() {
     const list = window._stockMoves || [];
     if (!list.length) {
@@ -1801,7 +1727,6 @@ ${bodyHTML}
       }).join('') + `</tbody></table></div>`;
   }
 
-
   function generateCategoryOptions(selected) {
     const defaults = ['عام','مأكولات','مشروبات','قرطاسية','إلكترونيات','ملابس'];
     const custom = (window._categories || []).map(c => c.name);
@@ -1813,14 +1738,10 @@ ${bodyHTML}
     return (window._products || []).map(p => `<option value="${p.id}">${p.name}${p.sku ? ' ('+p.sku+')' : ''}</option>`).join('');
   }
 
-  // ===========================
-  // CASH BOX / EXPENSES / SUPPLIERS — helpers
-  // ===========================
   function _fmt(amount, cur) {
-    return window.Currency ? window.Currency.format(amount, cur || 'SYP')
-                           : (Number(amount)||0).toLocaleString('ar-SY') + ' ل.س';
+    return window.Currency ? window.Currency.formatCompact(amount, cur || 'SYP')
+                           : (Number(amount)||0).toLocaleString('en-US') + ' ل.س';
   }
-  // Sum a list of {amount, currency} into the base currency (number)
   function _sumBase(list) {
     const base = window.Currency ? window.Currency.base : 'SYP';
     return (list || []).reduce((s, it) => {
@@ -1830,7 +1751,6 @@ ${bodyHTML}
     }, 0);
   }
   // ── Cost of Goods Sold (تكلفة البضاعة المباعة) ──
-  // Match an invoice line to its product (by id, sku, then name) to read its cost.
   function _findProduct(it) {
     const prods = window._products || [];
     return prods.find(p => p.id === (it.productId || it.id))
@@ -1838,16 +1758,15 @@ ${bodyHTML}
         || prods.find(p => p.name === it.name)
         || null;
   }
-  // COGS for one invoice (in base currency): Σ qty × unit-cost.
   function _invoiceCOGS(inv) {
     const base   = window.Currency ? window.Currency.base : 'SYP';
     const invCur = inv.currency || 'SYP';
     return (inv.items || []).reduce((s, it) => {
       const qty = Number(it.qty) || 0;
       let unitCost, costCur;
-      if (it.cost != null) {                 // cost snapshotted at sale time
+      if (it.cost != null) {
         unitCost = Number(it.cost) || 0; costCur = it.costCurrency || invCur;
-      } else {                               // fall back to the product's current cost
+      } else {
         const p  = _findProduct(it);
         unitCost = p ? (Number(p.cost) || 0) : 0;
         costCur  = p ? (p.currency || 'SYP') : invCur;
@@ -1856,15 +1775,22 @@ ${bodyHTML}
       return s + (window.Currency ? window.Currency.convert(line, costCur, base) : line);
     }, 0);
   }
-  // COGS across all real (non-draft) invoices, in base currency.
   function _cogsBase() {
     return (window._invoices || [])
       .filter(inv => inv.status !== 'draft' && inv.status !== 'quotation')
       .reduce((s, inv) => s + _invoiceCOGS(inv), 0);
   }
+  function _serviceRevenueBase(invList) {
+    const base = window.Currency ? window.Currency.base : 'SYP';
+    return (invList || []).reduce((s, inv) => {
+      const invCur = inv.currency || 'SYP';
+      const svcAmt = (inv.items || [])
+        .filter(it => it.type === 'service')
+        .reduce((ss, it) => ss + (Number(it.total) || (Number(it.price||0) * Number(it.qty||1))), 0);
+      return s + (window.Currency ? window.Currency.convert(svcAmt, invCur, base) : svcAmt);
+    }, 0);
+  }
   // ── Dashboard period filter (المبيعات + صافي الربح) ──
-  // Extract a JS Date from a record (invoice/expense): prefer createdAt (ms or ISO),
-  // then timestamp (ISO), then date ("YYYY/MM/DD").
   function _dashDateOf(obj) {
     if (!obj) return null;
     if (obj.createdAt != null) {
@@ -1875,12 +1801,11 @@ ${bodyHTML}
     if (obj.date) { const d = new Date(String(obj.date).replace(/\//g,'-')); if (!isNaN(d)) return d; }
     return null;
   }
-  // Return {start,end} Date range for a period key (null/null = all time).
   function _dashPeriodRange(period) {
     const now = new Date();
     const sod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
     const eod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-    const weekStart = ref => { const s = new Date(ref); s.setDate(ref.getDate() - ((ref.getDay() + 1) % 7)); return sod(s); }; // week starts Saturday
+    const weekStart = ref => { const s = new Date(ref); s.setDate(ref.getDate() - ((ref.getDay() + 1) % 7)); return sod(s); };
     let start = null, end = null;
     switch (period) {
       case 'today':     start = sod(now); end = eod(now); break;
@@ -1904,10 +1829,12 @@ ${bodyHTML}
     const realInvs = (window._invoices || []).filter(inv => inv && inv.status !== 'draft' && inv.status !== 'quotation');
     const periodInvs = realInvs.filter(inRange);
     const periodExp  = (window._expenses || []).filter(inRange);
-    const sales    = _sumBase(periodInvs);
+    const totalRev = _sumBase(periodInvs);
+    const svcRev   = _serviceRevenueBase(periodInvs);
+    const sales    = totalRev - svcRev;               // مبيعات المنتجات فقط
     const cogs     = periodInvs.reduce((s, inv) => s + _invoiceCOGS(inv), 0);
     const expenses = _sumBase(periodExp);
-    const profit   = sales - cogs - expenses;
+    const profit   = totalRev - cogs - expenses;      // الربح يشمل إيرادات الخدمات − تكلفتها
     const base     = window.Currency ? window.Currency.base : 'SYP';
 
     const salesEl = document.getElementById('dash-kpi-sales');
@@ -1923,7 +1850,6 @@ ${bodyHTML}
   window.setDashPeriod = function(period, btn) {
     const { start, end } = _dashPeriodRange(period);
     _renderDashKpis(start, end);
-    // clear the custom-range inputs when a preset is chosen
     const fEl = document.getElementById('dash-date-from'); if (fEl) fEl.value = '';
     const tEl = document.getElementById('dash-date-to');   if (tEl) tEl.value = '';
     document.querySelectorAll('.dash-period-btn').forEach(b => {
@@ -1940,9 +1866,8 @@ ${bodyHTML}
     let start = new Date(fromV + 'T00:00:00');
     let end   = new Date(toV   + 'T23:59:59.999');
     if (isNaN(start) || isNaN(end)) { showToast('warning', 'تاريخ غير صالح'); return; }
-    if (start > end) { const tmp = start; start = end; end = tmp; } // swap if reversed
+    if (start > end) { const tmp = start; start = end; end = tmp; }
     _renderDashKpis(start, end);
-    // deactivate all preset buttons (a custom range is now active)
     document.querySelectorAll('.dash-period-btn').forEach(b => {
       b.classList.remove('btn-primary');
       b.classList.add('btn-secondary');
@@ -1955,15 +1880,13 @@ ${bodyHTML}
             <option value="USD" ${cur==='USD'?'selected':''}>دولار ($)</option>`;
   }
 
-  // ===========================
   // CASH BOX (الصندوق)
-  // ===========================
   async function renderCashbox() {
     const salesBase    = _sumBase(window._invoices || []);
     const deposits     = _sumBase((window._cashbox||[]).filter(t => t.type === 'deposit'));
     const withdrawals  = _sumBase((window._cashbox||[]).filter(t => t.type === 'withdraw'));
     const expensesBase = _sumBase(window._expenses || []);
-    const debtUnpaid   = _creditDebtUnpaid();          // exclude unpaid credit from profit
+    const debtUnpaid   = _creditDebtUnpaid();
     const cogs         = _cogsBase();                  // تكلفة البضاعة المباعة
     const balance      = salesBase + deposits - withdrawals - expensesBase - debtUnpaid;
     const profit       = salesBase - cogs - expensesBase - debtUnpaid;
@@ -2076,9 +1999,7 @@ ${bodyHTML}
     navigate('cashbox');
   };
 
-  // ===========================
   // EXPENSES (المصروف)
-  // ===========================
   async function renderExpenses() {
     const _expList = (window._expenses || []);
     const totalBase = _sumBase(_expList);
@@ -2198,7 +2119,7 @@ ${bodyHTML}
       const sel  = document.getElementById('exp-employee');
       const emps = (window._employees || []).filter(e => e.active !== false);
       if (sel) sel.innerHTML = '<option value="">— اختر الموظف —</option>' +
-        emps.map(e => `<option value="${e.id}" data-salary="${e.salary||0}">${e.name}${e.salary ? ' — '+Number(e.salary).toLocaleString('ar-SY') : ''}</option>`).join('');
+        emps.map(e => `<option value="${e.id}" data-salary="${e.salary||0}">${e.name}${e.salary ? ' — '+Number(e.salary).toLocaleString('en-US') : ''}</option>`).join('');
       group.style.display = '';
     } else {
       group.style.display = 'none';
@@ -2219,10 +2140,7 @@ ${bodyHTML}
     }
   };
 
-  // ===========================
   // DEBTS (الديون)
-  // ===========================
-  // Helper: sum of all unpaid debt in base currency (used to adjust profit)
   function _creditDebtUnpaid() {
     const base = window.Currency ? window.Currency.base : 'SYP';
     return (window._debts || []).reduce((s, d) => {
@@ -2368,17 +2286,15 @@ ${bodyHTML}
     `;
   }
 
-  window.init_debts = function() { /* debts rendered server-side, no post-hook needed */ };
+  window.init_debts = function() { };
 
   window.filterDebts = function(q) {
     const t = q.toLowerCase();
     document.querySelectorAll('#debts-tbody tr[data-debt-id]').forEach(r => {
       r.style.display = r.dataset.debtCustomer?.includes(t) ? '' : 'none';
     });
-    // Simple text search: re-render would be cleaner, but DOM filter works for small lists
   };
 
-  // Filter by searching all td text
   window.filterDebts = function(q) {
     const t = (q || '').toLowerCase();
     document.querySelectorAll('#debts-tbody tr').forEach(r => {
@@ -2496,9 +2412,7 @@ ${bodyHTML}
     showToast('success', `تم تسجيل الدفعة ${_fmt(pay, d.currency||'SYP')} ✓`);
   };
 
-  // ===========================
   // SUPPLIERS (الموردين)
-  // ===========================
   async function renderSuppliers() {
     return `
     <div class="module-wrap">
@@ -2634,20 +2548,13 @@ ${bodyHTML}
     openModal('supplier-profile-modal');
   };
 
-  // Options for the product modal's supplier dropdown
   function generateSupplierOptions() {
     const list = window._suppliers || [];
     const opts = list.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
     return `<option value="">— بدون مورد —</option>${opts}`;
   }
 
-  // ===========================
-  // OTHER MODULES — Placeholder renderers
-  // ===========================
-  // ===========================
   // PURCHASES (المشتريات)
-  // Purchase orders from suppliers; "received" POs add quantities to stock.
-  // ===========================
   async function renderPurchases() {
     return `
     <div class="module-wrap">
@@ -2729,7 +2636,6 @@ ${bodyHTML}
     `;
   }
 
-  // Options for the purchase item product dropdown
   function _purchaseProductOptions(sel) {
     const list = window._products || [];
     return `<option value="">— منتج يدوي / جديد —</option>` +
@@ -2823,7 +2729,7 @@ ${bodyHTML}
       const line = qty * cost;
       total += line;
       const cell = row.querySelector('.pur-row-total');
-      if (cell) cell.textContent = line.toLocaleString('ar-SY');
+      if (cell) cell.textContent = line.toLocaleString('en-US');
     });
     const cur = document.getElementById('pur-currency')?.value || 'SYP';
     const gt  = document.getElementById('pur-grand-total');
@@ -2875,7 +2781,6 @@ ${bodyHTML}
     };
     window._purchases = window._purchases || [];
     window._purchases.unshift(po);
-    // Received orders flow straight into stock
     if (status === 'received') {
       items.forEach(it => {
         if (!it.productId) return;
@@ -3608,11 +3513,11 @@ ${bodyHTML}
     `;
   }
 
-  // ── Cashier display-currency picker (click-to-select cards instead of a dropdown) ──
   const CASHIER_CUR_OPTIONS = [
     { code:'SYP', icon:'🇸🇾', label:'سورية',  sym:'ل.س' },
     { code:'USD', icon:'💵', label:'أمريكي',  sym:'$'   },
-   ];
+    { code:'TRY', icon:'🇹🇷', label:'تركية',  sym:'₺'   },
+  ];
   function _cashierCurCardsHTML(selected) {
     return CASHIER_CUR_OPTIONS.map(c => {
       const isSel = selected === c.code;
@@ -3638,8 +3543,7 @@ ${bodyHTML}
   };
 
   async function renderSettings() {
-    const sections = ['معلومات الشركة','الإعدادات المالية','قوالب الطباعة','النسخ الاحتياطي','رمز الدخول والأمان','المظهر 🎨'];
-    // Per-account settings (loaded at boot into window._appSettings)
+    const sections = ['معلومات الشركة','الإعدادات المالية','قوالب الطباعة','النسخ الاحتياطي','الأمان والجلسة','المظهر 🎨'];
     const _s = window._appSettings || {};
     const _companyName    = _s.companyName    || '';
     const _regNo          = _s.regNo          || '';
@@ -3652,7 +3556,7 @@ ${bodyHTML}
     const _cashierCur     = _s.cashierCurrency || 'SYP';
     const _sessionTimeout = parseInt(_s.sessionTimeout) || 0;
     const hasPinSet       = !!localStorage.getItem('a3mali_pin_' + _acctKey());
-    const _lastBackupTs   = _s._lastBackupAt ? new Date(_s._lastBackupAt).toLocaleString('ar-SY') : 'لم يتم بعد';
+    const _lastBackupTs   = _s._lastBackupAt ? new Date(_s._lastBackupAt).toLocaleString('en-US') : 'لم يتم بعد';
     const _tplDefs = [
       { key:'invoice',   name:'الفاتورة الرئيسية', icon:'🧾' },
       { key:'receipt',   name:'إيصال الكاشير',      icon:'🖨️' },
@@ -3724,7 +3628,15 @@ ${bodyHTML}
                 <input type="hidden" id="s-cashier-currency" value="${_cashierCur}" />
                 <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:8px;">👆 اضغط على العملة لاختيارها — هي ما يظهر للموظف في شاشة الكاشير</div>
               </div>
-               
+              <div class="form-group" id="s-cashier-try-rate-wrap" style="display:${_cashierCur === 'TRY' ? '' : 'none'};">
+                <label class="form-label">سعر الصرف للكاشير — 1 دولار = ؟ ليرة تركية</label>
+                <div style="display:flex;gap:var(--sp-2);max-width:320px;">
+                  <input type="number" class="form-input" id="s-cashier-try-rate" min="0" step="any"
+                    placeholder="مثال: 32" value="${(_s.usdToTry || '')}" style="flex:1;" />
+                  <button class="btn btn-secondary btn-sm" onclick="fetchAutoTryRate()" style="white-space:nowrap;">🔄 جلب</button>
+                </div>
+                <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">مطلوب لتحويل الأسعار بين الليرة التركية والدولار</div>
+              </div>
               <div class="form-group"><label class="form-label">ملاحظات الفاتورة الافتراضية</label>
                 <textarea class="form-input form-textarea" id="s-invoice-note" style="height:80px;">${_invoiceNote}</textarea>
               </div>
@@ -3778,25 +3690,27 @@ ${bodyHTML}
             </div>
           </div>
 
-          <!-- Panel 5: PIN & Session (functional) -->
+          <!-- Panel 5: Security & Session -->
           <div id="spanel-5" class="card" style="display:none;">
-            <div class="card-header"><h3 style="font-weight:700;">رمز الدخول والأمان</h3></div>
+            <div class="card-header"><h3 style="font-weight:700;">الأمان والجلسة</h3></div>
             <div class="card-body" style="display:flex;flex-direction:column;gap:var(--sp-5);">
-              <div style="padding:var(--sp-4);background:${hasPinSet?'#0e0e0e':'var(--surface-2)'};border-radius:var(--r-lg);border:1px solid ${hasPinSet?'#6ee7b7':'var(--border)'};font-size:var(--text-sm);font-weight:600;">
-                ${hasPinSet?'🔒 رمز الدخول مفعّل — لوحة التحكم محمية':'🔓 لا يوجد رمز دخول — اللوحة مفتوحة للجميع'}
-              </div>
-              <div class="form-group">
-                <label class="form-label">رمز الدخول الجديد (PIN)</label>
-                <div class="password-wrap">
-                  <input type="password" class="form-input" id="s-pin-new" placeholder="أدخل رمزاً جديداً (4 خانات على الأقل)" maxlength="20" />
-                  <span class="password-toggle" onclick="const i=this.previousElementSibling;i.type=i.type==='password'?'text':'password'">👁</span>
+
+              <!-- Contact card to change PIN -->
+              <div style="display:flex;align-items:flex-start;gap:var(--sp-4);padding:var(--sp-5);background:var(--surface-2);border-radius:var(--r-lg);border:1px solid var(--border);">
+                <div style="font-size:36px;flex-shrink:0;">🔒</div>
+                <div>
+                  <div style="font-size:var(--text-base);font-weight:700;margin-bottom:4px;">رمز الدخول الشخصي (PIN)</div>
+                  <div style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.6;">
+                    رمز الدخول مرتبط بحسابك ويُحدَّد عند التسجيل.<br/>
+                    لتغيير الرمز، تواصل مع الشركة عبر قسم الدعم.
+                  </div>
+                  <a href="https://wa.me/905523223191?text=مرحباً، أريد تغيير رمز الدخول (PIN) الخاص بحسابي" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:var(--sp-3);padding:8px 18px;background:#25D366;color:#fff;border-radius:var(--r);font-size:var(--text-sm);font-weight:600;text-decoration:none;">
+                    💬 تواصل معنا لتغيير الرمز
+                  </a>
                 </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">تأكيد الرمز</label>
-                <input type="password" class="form-input" id="s-pin-confirm" placeholder="أعد إدخال الرمز للتأكيد" maxlength="20" />
-              </div>
-              ${hasPinSet?'<div><button class="btn btn-danger btn-sm" onclick="savePinSettings(true)">🗑️ إلغاء رمز الدخول</button></div>':''}
+
+              <!-- Session timeout -->
               <div class="form-group">
                 <label class="form-label">مدة انتهاء الجلسة (بالدقائق)</label>
                 <input type="number" class="form-input" id="s-session-timeout" value="${_sessionTimeout}" min="0" max="480" placeholder="0 = لا تنتهي" style="max-width:200px;" />
@@ -3804,7 +3718,7 @@ ${bodyHTML}
               </div>
             </div>
             <div class="card-footer" style="display:flex;justify-content:flex-end;">
-              <button class="btn btn-primary" onclick="savePinSettings()">حفظ إعدادات الأمان</button>
+              <button class="btn btn-primary" onclick="savePinSettings()">حفظ إعدادات الجلسة</button>
             </div>
           </div>
 
@@ -3822,7 +3736,6 @@ ${bodyHTML}
         </div><!-- end panels -->
       </div>
     </div>
-
 
     <!-- Template Editor Modal -->
     <div class="modal-overlay" id="template-editor-modal">
@@ -3854,18 +3767,13 @@ ${bodyHTML}
     `;
   }
 
-  // ===========================
-  // UI HELPERS
-  // ===========================
   window.openNewCustomerModal = () => openModal('new-customer-modal');
 
   window.openNewInvoiceModal = function(mode) {
-    // Ensure edit mode is cleared
     const modal = document.getElementById('new-invoice-modal');
     if (modal) delete modal.dataset.editId;
     const titleEl = document.querySelector('#new-invoice-modal .modal-title');
     if (titleEl) titleEl.textContent = 'إنشاء فاتورة جديدة';
-    // Reconfigure the footer action buttons
     const draftBtn   = document.getElementById('inv-save-draft-btn');
     const primaryBtn = document.getElementById('inv-save-primary-btn');
     if (draftBtn) draftBtn.style.display = '';
@@ -3874,22 +3782,17 @@ ${bodyHTML}
       primaryBtn.setAttribute('onclick', "saveInvoice('paid')");
     }
     openModal('new-invoice-modal');
-    // Set today's date automatically
     const today = new Date().toISOString().split('T')[0];
     const dateEl = document.getElementById('inv-date');
     if (dateEl) dateEl.value = today;
-    // Populate customers datalist
     const dl = document.getElementById('customers-datalist');
     if (dl) {
       dl.innerHTML = window._customers.map(c => `<option value="${c.name}">`).join('');
     }
-    // Populate the sales-rep selector from registered reps
     populateInvoiceRepSelect();
     calcInvoiceTotal();
   };
 
-  // Fill the invoice modal's rep <select> from the registered sales reps.
-  // `selected` optionally pre-selects a rep name (used when editing an invoice).
   window.populateInvoiceRepSelect = function(selected) {
     const sel = document.getElementById('inv-rep');
     if (!sel) return;
@@ -3900,7 +3803,6 @@ ${bodyHTML}
       const isSel = selected && String(selected).trim() === String(name).trim() ? ' selected' : '';
       html += `<option value="${name}"${isSel}>${name}</option>`;
     });
-    // If the invoice was attributed to a rep no longer in the list, keep it selectable
     if (selected && !reps.some(r => String(r.name).trim() === String(selected).trim())) {
       html += `<option value="${selected}" selected>${selected}</option>`;
     }
@@ -3923,22 +3825,18 @@ ${bodyHTML}
     window._customers.push(cust);
     window._saveData();
 
-    // Re-render the customers table + KPIs
     const tbody = document.getElementById('customers-body');
     if (tbody) tbody.innerHTML = generateCustomerRows();
     if (typeof window.init_crm === 'function') window.init_crm();
 
-    // Populate customers datalist in invoice modal
     const dl = document.getElementById('customers-datalist');
     if (dl) dl.innerHTML += `<option value="${name}">`;
 
     closeModal('new-customer-modal');
-    // Reset form
     inputs.forEach(i => { if (i.tagName !== 'SELECT') i.value = ''; });
     showToast('success', `تم إضافة العميل ${name} بنجاح ✓`);
   };
 
-  // ── Settings panel switcher ──
   window.settingsTab = function(index) {
     document.querySelectorAll('[id^="stab-"]').forEach((btn, i) => {
       btn.classList.toggle('active', i === index);
@@ -3962,7 +3860,6 @@ ${bodyHTML}
     showToast('success', 'تم حفظ معلومات الشركة بنجاح ✓');
   };
 
-  // Update the sidebar bottom identity (shop name + email) live
   window.refreshSidebarIdentity = function() {
     let u = {};
     try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
@@ -3992,7 +3889,6 @@ ${bodyHTML}
     showToast('success', 'تم حفظ الإعدادات المالية ✓');
   };
 
-  // ── Template editor — drag-and-drop reorderable section blocks ──
   const _TPL_BLOCK_DEFS = {
     invoice: [
       { id:'company',  icon:'🏢', label:'معلومات الشركة',      default:'{{companyName}}\n{{companyAddress}}' },
@@ -4043,7 +3939,7 @@ ${bodyHTML}
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  let _tplEditorState = null;   // { key, blocks: [{id, content, hidden}] }
+  let _tplEditorState = null;
   let _tplDragIdx = null;
 
   window.openTemplateEditor = function(key, name) {
@@ -4109,7 +4005,7 @@ ${bodyHTML}
   window._tplUpdateBlock = function(i, value) {
     if (!_tplEditorState || !_tplEditorState.blocks[i]) return;
     _tplEditorState.blocks[i].content = value;
-    _renderTplPreview();   // skip a full re-render so the textarea keeps focus/caret while typing
+    _renderTplPreview();
   };
 
   window._tplMove = function(i, dir) {
@@ -4159,7 +4055,6 @@ ${bodyHTML}
     showToast('success', 'تم حفظ القالب ✓');
   };
 
-  // ── Data export ──
   window.exportDataJSON = function() {
     try {
       const key = _acctKey();
@@ -4182,7 +4077,6 @@ ${bodyHTML}
     }
   };
 
-  // ── Clear all data (danger zone) ──
   window.confirmClearAllData = function() {
     if (!confirm('⚠️ سيتم حذف جميع البيانات (الفواتير، العملاء، المنتجات، الموردين، المصاريف، الديون، الكاشير وغيرها) بشكل نهائي ولا يمكن التراجع عن هذا الإجراء.\n\nهل تريد الاستمرار؟')) return;
     const typed = prompt('للتأكيد النهائي، اكتب كلمة "مسح" بدون اقتباس:');
@@ -4210,8 +4104,6 @@ ${bodyHTML}
     window._salesTargets   = [];
     window._printTemplates = {};
     window._saveData();
-    // Invoices now live in their own Firestore collection (not covered by
-    // _saveData()'s array-sync) — delete those documents explicitly too.
     if (typeof window._fsDeleteAllInvoices === 'function') {
       window._fsDeleteAllInvoices(_acctKey()).catch(e => console.warn('[ClearAllData] invoices cleanup failed', e));
     }
@@ -4219,7 +4111,6 @@ ${bodyHTML}
     window.navigate('dashboard');
   };
 
-  // ── PIN management ──
   window.savePinSettings = function(clear) {
     if (clear === true) {
       localStorage.removeItem('a3mali_pin_' + _acctKey());
@@ -4256,7 +4147,6 @@ ${bodyHTML}
     setTimeout(() => { if (typeof settingsTab === 'function') settingsTab(5); }, 150);
   };
 
-  // ── Session timeout ──
   let _sessTimer = null;
   window._startSessionTimeout = function(minutes) {
     if (_sessTimer) { clearTimeout(_sessTimer); _sessTimer = null; }
@@ -4277,7 +4167,6 @@ ${bodyHTML}
     });
   };
 
-  // ── HR helpers ──
   window.switchHRTab = function(btn, tab) {
     document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -4297,7 +4186,6 @@ ${bodyHTML}
     });
   };
 
-  // --- Employee color state ---
   let _empColor = '#3b82f6';
   window.setEmpColor = function(color) {
     _empColor = color;
@@ -4312,56 +4200,45 @@ ${bodyHTML}
     if (preview) preview.textContent = name ? name.charAt(0) : 'م';
   };
 
-  // ----- Employee card / row builders (shared by save + hydrate) -----
   function _empInitial(name) { return (name || 'م').trim().charAt(0) || 'م'; }
-  // Display a salary in the currency it was entered in, converted to the base display currency.
   function _fmtSalary(emp) {
     const amount = Number(emp && emp.salary || 0);
     const from   = (emp && emp.salaryCurrency) || 'SYP';
     return _fmtAmt(amount, from);
   }
-  // Format any amount in a given currency (falls back to SYP formatting).
   function _fmtAmt(amount, currency) {
     const cur = currency || 'SYP';
-    if (window.Currency && typeof window.Currency.format === 'function') return window.Currency.format(Number(amount) || 0, cur);
-    return (Number(amount) || 0).toLocaleString('ar-SY') + ' ل.س';
+    if (window.Currency && typeof window.Currency.formatCompact === 'function') return window.Currency.formatCompact(Number(amount) || 0, cur);
+    return (Number(amount) || 0).toLocaleString('en-US') + ' ل.س';
   }
-  // ── Payroll / leave date helpers ──
-  function _daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }       // m is 0-indexed
+  function _daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
   function _parseYMD(str) {
     if (!str) return null;
-    const m = String(str).replace(/\//g, '-').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const m = String(str).replace(/\//g,'-').match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (!m) return null;
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return isNaN(d.getTime()) ? null : d;
   }
   function _monthKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}`; }
   function _curMonthKey() { const n = new Date(); return _monthKey(n.getFullYear(), n.getMonth()); }
-  // Base salary owed to an employee for a given month, prorated for the first
-  // (hire) month so a mid-month hire is paid only from their start date.
   function _empSalaryBaseFor(emp, year, monthIdx) {
     const salary = Number(emp && emp.salary || 0);
     const dim    = _daysInMonth(year, monthIdx);
     const hire   = _parseYMD(emp && emp.hireDate);
     if (!hire) return { amount: salary, prorated: false, daysWorked: dim, daysInMonth: dim };
     const monthEnd = new Date(year, monthIdx, dim);
-    // Not yet employed during this month
     if (hire > monthEnd) return { amount: 0, prorated: false, daysWorked: 0, daysInMonth: dim };
-    // Hired within this month → prorate from the hire day to month end
     if (hire.getFullYear() === year && hire.getMonth() === monthIdx) {
       const daysWorked = dim - hire.getDate() + 1;
       return { amount: salary * daysWorked / dim, prorated: daysWorked < dim, daysWorked, daysInMonth: dim };
     }
-    // Hired before this month → full salary
     return { amount: salary, prorated: false, daysWorked: dim, daysInMonth: dim };
   }
-  // True when a stored leave belongs to the given employee (by id, else by name).
   function _leaveBelongsTo(lv, emp) {
     if (!lv || !emp) return false;
     if (lv.empId && emp.id) return lv.empId === emp.id;
     return String(lv.empName || '').trim().toLowerCase() === String(emp.name || '').trim().toLowerCase();
   }
-  // Number of an approved unpaid-leave's days that fall inside the given month.
   function _leaveDaysInMonth(lv, year, monthIdx) {
     const from = _parseYMD(lv.from), to = _parseYMD(lv.to);
     if (!from || !to) return 0;
@@ -4373,7 +4250,6 @@ ${bodyHTML}
     const days = Math.round((e - s) / 86400000) + 1;
     return days > 0 ? days : 0;
   }
-  // Salary deductions for an employee in a month from approved, unpaid leaves.
   function _empDeductionsFor(emp, year, monthIdx) {
     const salary = Number(emp && emp.salary || 0);
     if (salary <= 0) return 0;
@@ -4382,17 +4258,15 @@ ${bodyHTML}
     let deduction = 0;
     (window._leaves || []).forEach(lv => {
       if (lv.status !== 'approved') return;
-      if (lv.paid !== false) return;           // only unpaid leaves deduct
+      if (lv.paid !== false) return;
       if (!_leaveBelongsTo(lv, emp)) return;
       deduction += dailyRate * _leaveDaysInMonth(lv, year, monthIdx);
     });
     return deduction;
   }
-  // Find a recorded payroll disbursement for an employee in a month.
   function _payrollRecord(empId, monthKey) {
     return (window._payroll || []).find(p => p.empId === empId && p.month === monthKey);
   }
-  // Full payroll computation for an employee for a given month.
   function _payrollFor(emp, year, monthIdx) {
     const baseInfo   = _empSalaryBaseFor(emp, year, monthIdx);
     const deductions = _empDeductionsFor(emp, year, monthIdx);
@@ -4410,7 +4284,7 @@ ${bodyHTML}
     const t = today.getTime();
     const toTs = (v) => {
       if (!v) return NaN;
-      const d = new Date(String(v).replace(/\//g, '-')); d.setHours(0, 0, 0, 0);
+      const d = new Date(String(v).replace(/\//g,'-'));
       return d.getTime();
     };
     return (window._leaves || []).find(lv => {
@@ -4531,7 +4405,6 @@ ${bodyHTML}
         : `<tr><td colspan="8" style="text-align:center;padding:var(--sp-8);color:var(--text-muted);">أضف موظفين لبدء كشف الرواتب</td></tr>`;
     }
 
-    // KPIs
     const totalEl  = document.getElementById('emp-kpi-total');
     const activeEl = document.getElementById('emp-kpi-active');
     const leaveEl  = document.getElementById('emp-kpi-leave');
@@ -4543,15 +4416,14 @@ ${bodyHTML}
       if (window.Currency && typeof window.Currency.convert === 'function') {
         const base = window.Currency.base;
         const totalBase = list.reduce((s,e)=> s + window.Currency.convert(Number(e.salary||0), e.salaryCurrency||'SYP', base), 0);
-        salEl.textContent = window.Currency.format(totalBase, base);
+        salEl.textContent = window.Currency.formatCompact(totalBase, base);
       } else {
-        salEl.textContent = list.reduce((s,e)=>s+Number(e.salary||0),0).toLocaleString('ar-SY') + ' ل.س';
+        salEl.textContent = list.reduce((s,e)=>s+Number(e.salary||0),0).toLocaleString('en-US') + ' ل.س';
       }
     }
   };
   window.init_hr = function() { window.hydrateEmployees(); window.hydrateLeaves(); };
 
-  // Count employees currently on an approved leave that covers today.
   function _onLeaveTodayCount() {
     const today = new Date(); today.setHours(0,0,0,0);
     const names = new Set();
@@ -4564,7 +4436,6 @@ ${bodyHTML}
     return names.size;
   }
 
-  // Disburse this month's salary for one employee, after confirming by name.
   window.disburseSalary = function(empId) {
     const emp = (window._employees || []).find(e => e.id === empId);
     if (!emp) { showToast('error','الموظف غير موجود'); return; }
@@ -4598,7 +4469,6 @@ ${bodyHTML}
           date: new Date().toLocaleDateString('ar-SY'), createdAt: Date.now(),
         });
         window._saveData();
-        // Restore the confirm button to its default (delete) appearance
         okEl.textContent = 'تأكيد الحذف';
         okEl.className   = 'btn btn-danger';
         closeModal('confirm-modal');
@@ -4609,7 +4479,6 @@ ${bodyHTML}
     openModal('confirm-modal');
   };
 
-  // Revert a salary disbursement for the current month (escape hatch for mistakes).
   window.undoSalary = function(empId) {
     const emp = (window._employees || []).find(e => e.id === empId);
     const monthKey = _curMonthKey();
@@ -4621,7 +4490,6 @@ ${bodyHTML}
     showToast('info', `تم التراجع عن صرف راتب ${emp ? emp.name : ''}`);
   };
 
-  // Print the current month's payroll sheet.
   window.printPayroll = function() {
     const n = new Date();
     const year = n.getFullYear(), monthIdx = n.getMonth();
@@ -4732,7 +4600,6 @@ ${bodyHTML}
     showToast('info', `🏪 المستخدم: ${emp.username}  |  كلمة المرور: ${emp.password}`);
   };
 
-  // ---- Employee sales profile (computed from POS invoices) ----
   function _empSales(emp) {
     const uname = (emp.username||'').toLowerCase();
     const name  = (emp.name||'').toLowerCase();
@@ -4744,63 +4611,46 @@ ${bodyHTML}
     });
   }
   function _fmtMoney(n) {
-    return window.Currency ? window.Currency.format(Number(n)||0, window.Currency.base) : (Number(n)||0).toLocaleString('ar-SY')+' ل.س';
+    return window.Currency ? window.Currency.formatCompact(Number(n)||0, window.Currency.base) : (Number(n)||0).toLocaleString('en-US')+' ل.س';
   }
   function _fmtDateTime(v) {
     if (!v) return '—';
     const d = new Date(v);
-    return isNaN(d) ? '—' : d.toLocaleString('ar-SY');
+    return isNaN(d) ? '—' : d.toLocaleString('en-US');
   }
   const _CUR_NAMES = { SYP: 'ليرة سورية', USD: 'دولار أمريكي', TRY: 'ليرة تركية' };
   function _fmtMethodCur(inv) {
     const m = inv.method || '—';
-    // For POS sales the currency the cashier picked at checkout is stored in
-    // `paymentCurrency`; `currency` only holds the cashier's display setting.
-    // Prefer paymentCurrency so the sale shows the currency actually selected.
     const c = inv.paymentCurrency || inv.currency;
     return c ? m + ' · ' + (_CUR_NAMES[c] || c) : m;
   }
-  // Show the exchange rate that was FROZEN at the moment the invoice was created
-  // (SYP per 1 USD). It never changes afterwards, so the record reflects the rate
-  // in effect at sale time. Returns '—' for older invoices saved without a snapshot.
   function _fmtInvRate(inv) {
     const r = Number(inv.fxRate) || 0;
     if (r <= 0) return '—';
-    return r.toLocaleString('ar-SY') + ' ل.س/$';
+    return r.toLocaleString('en-US') + ' ل.س/$';
   }
-  // Format a single invoice's amount in the currency it was actually recorded
-  // in — this is a HISTORICAL record, so it must stay fixed regardless of the
-  // live exchange rate OR a later change to the base-currency setting.
-  //   • POS sales: show the frozen `paymentAmount` in `paymentCurrency`.
-  //   • Dashboard invoices: show `amount` directly in its own `currency`.
-  // (Aggregates like "this month's sales" still follow the base currency — only
-  //  the per-invoice record amount is pinned here.)
   function _fmtInvAmount(inv) {
     const amt = Number(inv.amount) || 0;
-    if (!window.Currency) return amt.toLocaleString('ar-SY') + ' ل.س';
+    if (!window.Currency) return amt.toLocaleString('en-US') + ' ل.س';
     let cur, val;
     if (inv.source === 'pos' && inv.paymentCurrency) {
       cur = inv.paymentCurrency;
-      // Prefer the exact amount captured at sale time; fall back to a live
-      // conversion only for older invoices saved before the snapshot existed.
       val = (inv.paymentAmount != null)
         ? (Number(inv.paymentAmount) || 0)
         : window.Currency.convert(amt, window.Currency.base || 'SYP', cur);
     } else {
-      // Amount is stored in the invoice's own currency — show it as recorded,
-      // without re-converting to the current base currency.
       cur = inv.currency || window.Currency.base || 'SYP';
       val = amt;
     }
     const d   = window.Currency.digits(cur);
     const sym = window.Currency.symbol(cur);
-    return val.toLocaleString('ar-SY', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + sym;
+    return val.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + sym;
   }
   let _empStatsId = null;
   let _empStatsRange = 'all';
   function _empWeekStart(now) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diff = (d.getDay() + 1) % 7; // days since Saturday (week starts Saturday)
+    const diff = (d.getDay() + 1) % 7;
     d.setDate(d.getDate() - diff);
     return d;
   }
@@ -4832,10 +4682,8 @@ ${bodyHTML}
     const total = sales.reduce((s,x) => s + (Number(x.total)||0), 0);
     const count = sales.length;
     const avg   = count ? total / count : 0;
-    // Last sale (sales are stored newest-first in the shared store, but sort to be safe)
     const sorted = [...sales].sort((a,b) => new Date(b.timestamp||b.createdAt||0) - new Date(a.timestamp||a.createdAt||0));
     const lastSale = sorted[0];
-    // Top product by quantity
     const qty = {};
     sales.forEach(s => (s.items||[]).forEach(it => { qty[it.name] = (qty[it.name]||0) + (Number(it.qty)||0); }));
     let topName = '—', topQty = 0;
@@ -5015,7 +4863,7 @@ ${bodyHTML}
     const lv = (window._leaves || []).find(l => l.id === id);
     if (!lv) return;
     lv.status = 'approved';
-    lv.updatedAt = Date.now();   // newer wins when the cashier merges this change live
+    lv.updatedAt = Date.now();
     if (typeof _saveData === 'function') _saveData();
     window.hydrateLeaves();
     window.hydrateEmployees();
@@ -5128,7 +4976,7 @@ ${bodyHTML}
     document.querySelectorAll('#invoices-tbody tr[data-inv-status]').forEach(row => {
       if (!date) { row.style.display = ''; return; }
       const dateTd = row.querySelector('td:nth-child(6)');
-      const rowDate = dateTd?.textContent.trim().replace(/\//g,'-') || '';
+      const rowDate = dateTd?.textContent.trim().replace(/\//g,'-');
       row.style.display = rowDate.includes(date) ? '' : 'none';
     });
   };
@@ -5138,8 +4986,12 @@ ${bodyHTML}
       row.style.display = (k === 'all' || row.dataset.invSeller === k) ? '' : 'none';
     });
   };
-  // Reorder the invoice rows by their date column (col 6). Dates are "YYYY/MM/DD"
-  // so lexical comparison sorts them correctly. Preserves current filters/search.
+  window.filterInvoicesByType = function(type) {
+    document.querySelectorAll('#invoices-tbody tr[data-inv-status]').forEach(row => {
+      if (type === 'all') { row.style.display = ''; return; }
+      row.style.display = row.dataset.invType === type ? '' : 'none';
+    });
+  };
   window.sortInvoices = function(order) {
     const tbody = document.getElementById('invoices-tbody');
     if (!tbody) return;
@@ -5154,18 +5006,13 @@ ${bodyHTML}
     rows.forEach(r => tbody.appendChild(r));
   };
 
-  // Convert a date string ("YYYY/MM/DD", "YYYY-MM-DD", ISO) or a numeric
-  // timestamp into a comparable millisecond number. Returns 0 when unknown.
   window._dateToTs = function(v) {
     if (v == null || v === '') return 0;
     if (typeof v === 'number') return v;
-    const d = new Date(String(v).replace(/\//g, '-'));
+    const d = new Date(String(v).replace(/\//g,'-'));
     return isNaN(d) ? 0 : d.getTime();
   };
 
-  // Generic newest/oldest sorter. Reorders the direct child rows/cards of a
-  // container by their data-ts attribute. Works for table bodies and card grids.
-  // order: 'newest' (default) | 'oldest'. childSel defaults to ':scope > *'.
   window._sortRows = function(containerId, order, childSel) {
     const box = document.getElementById(containerId);
     if (!box) return;
@@ -5181,7 +5028,6 @@ ${bodyHTML}
     items.forEach(el => box.appendChild(el));
   };
 
-  // Reusable sort dropdown markup for section toolbars.
   window._sortSelectHTML = function(containerId, childSel) {
     const arg = childSel ? `'${containerId}',this.value,'${childSel}'` : `'${containerId}',this.value`;
     return `<select class="form-select" style="width:auto;height:38px;" title="ترتيب حسب التاريخ" onchange="_sortRows(${arg})">
@@ -5251,16 +5097,12 @@ ${bodyHTML}
     refreshInvKpis();
   };
 
-  // ===========================
-  // INVENTORY — actions (tabs, edit, qty, movements, categories)
-  // ===========================
   function _curUserName() {
     let u = {};
     try { u = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
     return u.name || u.email || 'النظام';
   }
 
-  // Log a stock movement and update the product's stock. qty is signed (+in / -out).
   function recordStockMove(prod, type, qty, reason) {
     qty = Number(qty) || 0;
     prod.stock = Math.max(0, (Number(prod.stock) || 0) + qty);
@@ -5268,8 +5110,8 @@ ${bodyHTML}
       id: 'MOV-' + Date.now().toString().slice(-8),
       productId: prod.id,
       productName: prod.name,
-      type,                       // 'in' | 'out' | 'sale' | 'adjust'
-      qty,                        // signed
+      type,
+      qty,
       balanceAfter: prod.stock,
       reason: reason || '',
       user: _curUserName(),
@@ -5281,7 +5123,6 @@ ${bodyHTML}
     return move;
   }
 
-  // ---- Low-stock notification helper ----
   function _checkLowStockNotify(prod) {
     const min   = _prodMin(prod);
     const stock = Number(prod.stock) || 0;
@@ -5291,8 +5132,11 @@ ${bodyHTML}
       showToast('warning', `⚠️ ${prod.name} رح ينفذ من المخزون — المتبقي: ${stock}`);
   }
 
-  // Aggregate low/out-of-stock notification (fired when opening inventory/dashboard).
+  let _lastLowStockToast = 0;
   function _checkAllLowStock() {
+    const now = Date.now();
+    if (now - _lastLowStockToast < 10 * 60 * 1000) return;
+    _lastLowStockToast = now;
     const prods = (window._products || []);
     const out = prods.filter(p => (Number(p.stock) || 0) <= 0).length;
     const low = prods.filter(p => { const s = Number(p.stock) || 0; return s > 0 && s <= _prodMin(p); }).length;
@@ -5327,7 +5171,6 @@ ${bodyHTML}
     if (tab === 'categories') _refreshCategoriesPanel();
   };
 
-  // From the "new product" form: jump to the categories tab to add a new category.
   window.goToAddCategory = function() {
     if (typeof window.closeModal === 'function') window.closeModal('new-product-modal');
     let catBtn = null;
@@ -5355,26 +5198,23 @@ ${bodyHTML}
   window.refreshInvKpis = function() {
     const list = window._products || [];
     let inStock = 0, low = 0, out = 0;
-    // Total inventory value (stock × cost), accumulated in both USD and SYP.
-    // Each product's cost is stored in its own currency (p.currency); we convert
-    // every line to USD and to SYP using the current exchange rate. Unlike sale
-    // invoices, inventory value is a live asset figure so it tracks the rate.
-    let valUSD = 0, valSYP = 0;
-    // Total inventory value at selling price (stock × price), same dual-currency logic.
-    let saleUSD = 0, saleSYP = 0;
+    let valUSD = 0, valSYP = 0, valTRY = 0;
+    let saleUSD = 0, saleSYP = 0, saleTRY = 0;
     list.forEach(p => {
       const s = Number(p.stock) || 0;
       const m = _prodMin(p);
       if (s <= 0) out++;
       else { inStock++; if (s <= m) low++; }
       const cur = p.currency || 'SYP';
-      const costVal = s * (Number(p.cost)  || 0);   // in p.currency
-      const saleVal = s * (Number(p.price) || 0);   // in p.currency
+      const costVal = s * (Number(p.cost)  || 0);
+      const saleVal = s * (Number(p.price) || 0);
       if (window.Currency) {
         valUSD  += window.Currency.convert(costVal, cur, 'USD');
         valSYP  += window.Currency.convert(costVal, cur, 'SYP');
+        valTRY  += window.Currency.convert(costVal, cur, 'TRY');
         saleUSD += window.Currency.convert(saleVal, cur, 'USD');
         saleSYP += window.Currency.convert(saleVal, cur, 'SYP');
+        saleTRY += window.Currency.convert(saleVal, cur, 'TRY');
       } else {
         valSYP  += costVal;
         saleSYP += saleVal;
@@ -5382,9 +5222,9 @@ ${bodyHTML}
     });
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const fmtCur = (val, code) => {
-      if (!window.Currency) return (Number(val)||0).toLocaleString('ar-SY');
+      if (!window.Currency) return (Number(val)||0).toLocaleString('en-US');
       const d = window.Currency.digits(code);
-      return (Number(val)||0).toLocaleString('ar-SY', { minimumFractionDigits: d, maximumFractionDigits: d })
+      return (Number(val)||0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
              + ' ' + window.Currency.symbol(code);
     };
     set('inv-kpi-total', list.length);
@@ -5393,19 +5233,19 @@ ${bodyHTML}
     set('inv-kpi-out', out);
     set('inv-value-usd', fmtCur(valUSD, 'USD'));
     set('inv-value-syp', fmtCur(valSYP, 'SYP'));
+    set('inv-value-try', fmtCur(valTRY, 'TRY'));
     set('inv-sale-usd', fmtCur(saleUSD, 'USD'));
     set('inv-sale-syp', fmtCur(saleSYP, 'SYP'));
+    set('inv-sale-try', fmtCur(saleTRY, 'TRY'));
   };
   function refreshInvKpis() { return window.refreshInvKpis(); }
 
-  // ---- Emoji picker helpers ----
   window.toggleEmojiPicker = function(which, event) {
     if (event) event.stopPropagation();
     const pickerId = 'emoji-picker-' + which;
     const picker = document.getElementById(pickerId);
     if (!picker) return;
     const isOpen = picker.style.display !== 'none';
-    // Close all pickers first
     ['new','edit'].forEach(w => {
       const p = document.getElementById('emoji-picker-' + w);
       if (p) p.style.display = 'none';
@@ -5420,12 +5260,10 @@ ${bodyHTML}
     const inp = document.getElementById(inputId);
     if (dsp) dsp.textContent = emoji;
     if (inp) inp.value = emoji;
-    // Close picker
     const picker = document.getElementById('emoji-picker-' + which);
     if (picker) picker.style.display = 'none';
   };
 
-  // Close emoji pickers when clicking outside
   document.addEventListener('click', () => {
     ['new','edit'].forEach(w => {
       const p = document.getElementById('emoji-picker-' + w);
@@ -5433,7 +5271,6 @@ ${bodyHTML}
     });
   });
 
-  // ---- Edit product ----
   window.editProduct = function(id) {
     const p = (window._products || []).find(x => x.id === id);
     if (!p) { showToast('error','المنتج غير موجود'); return; }
@@ -5484,7 +5321,6 @@ ${bodyHTML}
     showToast('success', `تم تحديث المنتج ${name} ✓`);
   };
 
-  // ---- Add / remove quantity (stock movement) ----
   window.openAddQty = function(id) {
     const p = (window._products || []).find(x => x.id === id);
     if (!p) { showToast('error','المنتج غير موجود'); return; }
@@ -5510,7 +5346,6 @@ ${bodyHTML}
     }
     const signed = type === 'out' ? -amount : amount;
     recordStockMove(p, type, signed, reason || (type === 'in' ? 'استلام بضاعة' : 'صرف'));
-    // Auto-create a purchase record when adding stock
     if (type === 'in') {
       const today = new Date().toISOString().slice(0,10).replace(/-/g,'/');
       const autoPoId = 'PO-' + Date.now().toString().slice(-6);
@@ -5536,7 +5371,6 @@ ${bodyHTML}
     showToast('success', `${type === 'in' ? 'تمت إضافة' : 'تم صرف'} ${amount} وحدة — الرصيد: ${p.stock}`);
   };
 
-  // ---- Toggle product availability in the cashier screen ----
   window.toggleProductActive = function(id) {
     const p = (window._products || []).find(x => x.id === id);
     if (!p) return;
@@ -5548,7 +5382,6 @@ ${bodyHTML}
       : `تم تفعيل ${p.name} ✓`);
   };
 
-  // ---- Delete product ----
   window.deleteProduct = function(id) {
     const p = (window._products || []).find(x => x.id === id);
     if (!p) return;
@@ -5559,7 +5392,6 @@ ${bodyHTML}
     showToast('success', `تم حذف المنتج ${p.name}`);
   };
 
-  // ---- Stock adjustment (stocktake) ----
   window.onAdjustProductChange = function() {
     const id = document.getElementById('adj-product')?.value;
     const p  = (window._products || []).find(x => x.id === id);
@@ -5586,7 +5418,6 @@ ${bodyHTML}
     showToast('success', `تم ضبط مخزون ${p.name} إلى ${actual} (${diff > 0 ? '+' : ''}${diff})`);
   };
 
-  // ---- Categories ----
   window.saveCategory = function() {
     const input = document.getElementById('cat-name');
     const name  = (input?.value || '').trim();
@@ -5599,7 +5430,6 @@ ${bodyHTML}
     window._saveData();
     if (input) input.value = '';
     _refreshCategoriesPanel();
-    // refresh category selects/filter
     const filter = document.getElementById('inv-cat-filter');
     if (filter) {
       const sel = filter.value;
@@ -5627,20 +5457,16 @@ ${bodyHTML}
     showToast('success', `تم حذف الفئة "${c.name}"`);
   };
 
-  // ---- Post-render hook for inventory module ----
   window.init_inventory = function() {
     refreshInvKpis();
-    // ensure products tab is the active one on (re)entry
     const firstTab = document.querySelector('#content .tabs .tab-btn');
     ['products','movements','adjust','categories'].forEach(t => {
       const panel = document.getElementById('inv-panel-' + t);
       if (panel) panel.style.display = (t === 'products') ? '' : 'none';
     });
-    // Notify the user about low / out-of-stock products
     _checkAllLowStock();
   };
 
-  // Home screen: surface low-stock alerts on entry
   window.init_dashboard = function() {
     _checkAllLowStock();
     if (typeof window.renderNotifications === 'function') window.renderNotifications();
@@ -5649,15 +5475,11 @@ ${bodyHTML}
     if (typeof window.autoFetchRateOnce === 'function') window.autoFetchRateOnce();
   };
 
-  // --- Sales KPIs: this month's sales + paid/pending/overdue counts ---
   window.init_sales = function() {
     const invs = (window._invoices || []);
     const base = window.Currency ? window.Currency.base : 'SYP';
     const n  = new Date();
     const ym = `${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}`;
-    // "Sales" = real invoices (exclude drafts & quotations) dated in the current month.
-    // All four KPIs are scoped to THIS month so they reconcile:
-    // month total = (paid + pending + overdue) of the current month.
     const monthInvs = invs.filter(inv =>
       inv.status !== 'draft' && inv.status !== 'quotation' && String(inv.date || '').startsWith(ym));
     const monthList = monthInvs
@@ -5673,7 +5495,6 @@ ${bodyHTML}
     set('sales-kpi-overdue', overdue);
   };
 
-  // --- Installments ---
   window.switchInstTab = function(btn, tab) {
     document.querySelectorAll('#inst-tab-active,#inst-tab-overdue,#inst-tab-completed,#inst-tab-schedule').forEach(el => el.style.display = 'none');
     const target = document.getElementById(`inst-tab-${tab}`);
@@ -5718,8 +5539,8 @@ ${bodyHTML}
       customer, phone, product,
       total, down, count, interest,
       monthly, financed,
-      startDate,                 // 'YYYY-MM-DD' — due date of the first installment
-      payments: [],              // [{ idx, amount, date }]
+      startDate,
+      payments: [],
       createdAt: Date.now(),
     };
     window._installments = window._installments || [];
@@ -5739,9 +5560,7 @@ ${bodyHTML}
     if (typeof window.renderNotifications === 'function') window.renderNotifications();
   };
 
-  // ── Installment helpers ────────────────────────────────────────────
-  const _instFmt = (n) => (Number(n) || 0).toLocaleString('ar-SY') + ' ل.س';
-  // Due date of installment #i (0-based) = startDate + i months
+  const _instFmt = (n) => (Number(n) || 0).toLocaleString('en-US') + ' ل.س';
   function _instDueDate(startDate, i) {
     const d = new Date(startDate);
     if (isNaN(d)) return null;
@@ -5752,7 +5571,6 @@ ${bodyHTML}
   function _instDateStr(d) {
     return d ? d.toISOString().slice(0, 10) : '—';
   }
-  // Compute live status for a plan based on payments + today's date.
   function _instStats(p) {
     const count    = Number(p.count) || 0;
     const monthly  = Number(p.monthly) || 0;
@@ -5768,7 +5586,6 @@ ${bodyHTML}
       status = 'completed';
     } else {
       nextDue = _instDueDate(p.startDate, paidCount);
-      // Any scheduled-but-unpaid installment whose due date has arrived is overdue/due.
       for (let i = paidCount; i < count; i++) {
         const due = _instDueDate(p.startDate, i);
         if (!due) break;
@@ -5832,12 +5649,10 @@ ${bodyHTML}
     </table></div>`;
   }
 
-  // Render all installment tabs + KPIs from persisted data.
   window.refreshInstallments = function() {
     const plans = window._installments || [];
     const enriched = plans.map(p => ({ p, s: _instStats(p) }));
 
-    // Active tab (active + overdue, i.e. everything not completed)
     const activeBody = document.getElementById('inst-table-body');
     if (activeBody) {
       const rows = enriched.filter(e => !e.s.completed);
@@ -5849,7 +5664,6 @@ ${bodyHTML}
              <button class="btn btn-primary btn-sm" onclick="openModal('new-installment-modal')">+ إضافة قسط جديد</button>
            </td></tr>`;
     }
-    // Overdue tab
     const overdueTab = document.getElementById('inst-tab-overdue');
     if (overdueTab) {
       const rows = enriched.filter(e => e.s.status === 'overdue');
@@ -5857,7 +5671,6 @@ ${bodyHTML}
         ? _instTableShell(rows.map((e, i) => _instRow(e.p, i)).join(''))
         : `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">لا توجد أقساط متأخرة</div></div>`;
     }
-    // Completed tab
     const completedTab = document.getElementById('inst-tab-completed');
     if (completedTab) {
       const rows = enriched.filter(e => e.s.completed);
@@ -5866,7 +5679,6 @@ ${bodyHTML}
         : `<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">لا توجد أقساط مكتملة بعد</div></div>`;
     }
 
-    // KPIs
     let totalRemaining = 0, overdueInstallments = 0, collectedThisMonth = 0, dueToday = 0;
     const now = new Date();
     enriched.forEach(({ p, s }) => {
@@ -5890,7 +5702,6 @@ ${bodyHTML}
     refreshInstallments();
   };
 
-  // Record one monthly installment payment for a plan.
   window.recordInstallmentPayment = function(id) {
     const p = (window._installments || []).find(x => x.id === id);
     if (!p) { showToast('warning', 'الخطة غير موجودة'); return; }
@@ -5941,7 +5752,6 @@ ${bodyHTML}
         <thead><tr><th>القسط</th><th>تاريخ الاستحقاق</th><th>القيمة</th><th>الحالة</th></tr></thead>
         <tbody>${rows.join('')}</tbody>
       </table></div>`;
-    // Switch to the schedule tab
     document.querySelectorAll('#inst-tab-active,#inst-tab-overdue,#inst-tab-completed,#inst-tab-schedule')
       .forEach(el => el.style.display = 'none');
     tab.style.display = '';
@@ -5967,7 +5777,6 @@ ${bodyHTML}
     };
   };
 
-  // --- Commissions ---
   window.switchComTab = function(btn, tab) {
     document.querySelectorAll('#com-tab-targets,#com-tab-reps,#com-tab-commissions,#com-tab-leaderboard').forEach(el => el.style.display = 'none');
     const target = document.getElementById(`com-tab-${tab}`);
@@ -5975,9 +5784,6 @@ ${bodyHTML}
     btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   };
-  // True when an invoice is attributed to the given rep name.
-  // Matches the invoice's `rep` (office sales) or `cashier`/`cashierUser` (POS sales),
-  // case-insensitively and trimmed, so attribution is robust across modules.
   function _invMatchesRep(inv, name) {
     const target = String(name || '').trim().toLowerCase();
     if (!target) return false;
@@ -5985,8 +5791,6 @@ ${bodyHTML}
       v => String(v || '').trim().toLowerCase() === target
     );
   }
-  // Sum a seller's real sales (excludes drafts/quotations) within an optional date range.
-  // Dates are "YYYY/MM/DD" so lexical comparison works.
   function _repSales(name, start, end) {
     const s = start ? String(start).replace(/-/g,'/') : null;
     const e = end   ? String(end).replace(/-/g,'/')   : null;
@@ -6062,9 +5866,8 @@ ${bodyHTML}
     }).join('');
   }
 
-  // Union of rep names from the registered reps list plus any rep referenced by a target.
   function _allRepNames() {
-    const map = new Map();  // lower -> display name
+    const map = new Map();
     (window._salesReps || []).forEach(r => {
       const n = String(r.name || '').trim();
       if (n) map.set(n.toLowerCase(), n);
@@ -6075,14 +5878,12 @@ ${bodyHTML}
     });
     return [...map.values()];
   }
-  // The default commission rate registered for a rep (0 when not registered).
   function _repRate(name) {
     const r = (window._salesReps || []).find(
       x => String(x.name || '').trim().toLowerCase() === String(name).trim().toLowerCase()
     );
     return r ? (Number(r.rate) || 0) : 0;
   }
-  // Earnings a rep accrues from their sales targets (rate on achieved + bonus when reached).
   function _repTargetEarnings(name) {
     let earned = 0;
     (window._salesTargets || []).forEach(t => {
@@ -6266,8 +6067,6 @@ ${bodyHTML}
     badge.classList.toggle('has-notif', hasUnread);
   };
 
-  // Build the notification center from live data.
-  // Aggregates: out-of-stock + low-stock products, overdue invoices, unpaid debts.
   window.buildNotifications = function() {
     const items = [];
     (window._products || []).forEach(p => {
@@ -6287,7 +6086,6 @@ ${bodyHTML}
       if ((d.status && d.status !== 'paid') && rem > 0)
         items.push({ icon:'💳', text:`دين غير مسدّد — <strong>${d.customerName || '—'}</strong>`, time:_fmt(rem, d.currency || 'SYP') });
     });
-    // Late installment payments — one alert per plan, with the overdue count.
     (window._installments || []).forEach(p => {
       const s = (typeof _instStats === 'function') ? _instStats(p) : null;
       if (!s) return;
@@ -6322,9 +6120,6 @@ ${bodyHTML}
     if (typeof window.updateNotifBadge === 'function') window.updateNotifBadge();
   };
 
-  // ===========================
-  // CHART PERIOD SWITCH
-  // ===========================
   window.switchChartPeriod = function(btn, period) {
     const parentTabs = btn.closest('.tabs') || btn.parentElement;
     if (parentTabs) parentTabs.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -6332,7 +6127,6 @@ ${bodyHTML}
     renderRevenueChart(period);
   };
 
-  // Build the period buckets and draw bars inside #revenue-chart.
   window.renderRevenueChart = function(period) {
     period = period || 'daily';
     const chart = document.getElementById('revenue-chart');
@@ -6343,7 +6137,6 @@ ${bodyHTML}
     const invs = (window._invoices || []).filter(inv =>
       inv && inv.date && inv.status !== 'draft' && inv.status !== 'quotation');
 
-    // Each bucket: { label, value, key(date) }
     const buckets = [];
     if (period === 'daily') {
       const days = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
@@ -6357,7 +6150,7 @@ ${bodyHTML}
         const start = new Date(end); start.setDate(end.getDate() - 6); start.setHours(0,0,0,0);
         buckets.push({ label: 'أسبوع ' + (6 - i), value: 0, start, end: new Date(end.getTime() + 1) });
       }
-    } else { // monthly
+    } else {
       const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
       for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -6366,7 +6159,6 @@ ${bodyHTML}
       }
     }
 
-    // Accumulate invoice amounts into the matching bucket — converted to the
     // base currency so the figures match the "إجمالي المبيعات" KPI.
     invs.forEach(inv => {
       const d = new Date(inv.date.replace(/\//g,'-'));
@@ -6392,7 +6184,7 @@ ${bodyHTML}
     const sym = window.Currency ? window.Currency.symbol(base) : 'ل.س';
     const digits = window.Currency ? window.Currency.digits(base) : 0;
     // Full precise amount in the base currency (e.g. ٣١٧٬٩٨٦ ل.س / 1,250.00 $).
-    const fmtFull = (n) => (Number(n) || 0).toLocaleString('ar-SY', {
+    const fmtFull = (n) => (Number(n) || 0).toLocaleString('en-US', {
       minimumFractionDigits: digits, maximumFractionDigits: digits
     }) + ' ' + sym;
 
@@ -6409,9 +6201,6 @@ ${bodyHTML}
     }).join('');
   };
 
-  // ===========================
-  // EXPORT DASHBOARD
-  // ===========================
   window.exportDashboard = function() {
     const statusMap = { paid:'مدفوعة', pending:'معلقة', overdue:'متأخرة', draft:'مسودة', quotation:'عرض سعر' };
     const rows = [['#','العميل','المبلغ','طريقة الدفع','الحالة','التاريخ']];
@@ -6423,9 +6212,6 @@ ${bodyHTML}
     showToast('success','تم تصدير تقرير لوحة التحكم ✓');
   };
 
-  // ===========================
-  // INVOICE VIEW / PRINT / EDIT
-  // ===========================
   window.viewInvoice = function(id) {
     const inv = (window._invoices || []).find(i => i.id === id);
     if (!inv) { showToast('warning','الفاتورة غير موجودة'); return; }
@@ -6454,7 +6240,62 @@ ${bodyHTML}
         <div style="padding:var(--sp-5);background:var(--surface-2);border-radius:var(--r-lg);text-align:center;">
           <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:4px;">إجمالي الفاتورة</div>
           <div style="font-size:var(--text-3xl);font-weight:800;color:var(--primary);">${_fmtInvAmount(inv)}</div>
-        </div>`;
+        </div>
+        ${(inv.items && inv.items.length) ? `
+        <div style="margin-top:var(--sp-5);">
+          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--sp-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">تفاصيل الأصناف</div>
+          <div class="table-wrap" style="margin:0;">
+            <table class="table" style="margin:0;">
+              <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+              <tbody>
+                ${(inv.items || []).map(it => {
+                  const isSvc = it.type === 'service';
+                  const C = window.Currency;
+                  let priceStr, totalStr;
+                  if (isSvc && it.servicePriceDisplay != null && it.serviceCurrency) {
+                    const sc  = it.serviceCurrency;
+                    const sym = C ? C.symbol(sc) : sc;
+                    const d   = C ? C.digits(sc) : 0;
+                    priceStr = Number(it.servicePriceDisplay).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}) + ' ' + sym;
+                    totalStr = (Number(it.servicePriceDisplay) * (it.qty||1)).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}) + ' ' + sym;
+                  } else {
+                    const cur = inv.currency || 'SYP';
+                    priceStr = _fmt(it.price || 0, cur);
+                    totalStr = _fmt((it.price || 0) * (it.qty || 1), cur);
+                  }
+                  return `<tr>
+                    <td>
+                      ${isSvc ? '<span style="margin-left:4px;">⚙️</span>' : ''}
+                      <span style="font-weight:600;">${it.name}</span>
+                      ${isSvc ? '<span class="badge badge-info" style="margin-right:6px;font-size:10px;">خدمة</span>' : ''}
+                      ${isSvc && it.notes ? `<div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:2px;">${it.notes}</div>` : ''}
+                    </td>
+                    <td style="text-align:center;">×${it.qty||1}</td>
+                    <td>${priceStr}</td>
+                    <td style="font-weight:700;">${totalStr}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        ${(() => {
+          const cogs   = _invoiceCOGS(inv);
+          const base   = window.Currency ? window.Currency.base : (inv.currency || 'SYP');
+          const invAmt = window.Currency ? window.Currency.convert(inv.amount||0, inv.currency||'SYP', base) : (inv.amount||0);
+          const profit = invAmt - cogs;
+          const pColor = profit > 0 ? 'var(--success)' : (profit < 0 ? 'var(--danger)' : 'var(--text-muted)');
+          return `<div style="margin-top:var(--sp-4);padding:var(--sp-4);background:var(--surface-2);border-radius:var(--r-lg);display:flex;flex-direction:column;gap:var(--sp-2);">
+            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm);color:var(--text-muted);">
+              <span>التكلفة (COGS)</span><span>${_fmt(cogs, base)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm);font-weight:700;color:${pColor};">
+              <span>صافي الربح</span><span>${_fmt(profit, base)}</span>
+            </div>
+          </div>`;
+        })()}
+        ` : ''}
+        ${inv.notes ? `<div style="margin-top:var(--sp-4);padding:var(--sp-3) var(--sp-4);background:var(--surface-2);border-radius:var(--r-lg);font-size:var(--text-sm);color:var(--text-muted);">📝 ${inv.notes}</div>` : ''}`;
     }
     const printBtn = document.getElementById('view-inv-print-btn');
     if (printBtn) printBtn.onclick = () => { closeModal('view-invoice-modal'); printInvoice(id); };
@@ -6483,17 +6324,13 @@ ${bodyHTML}
     `);
   };
 
-  // ===========================
-  // INVOICES PANEL (select + print one or many)
-  // ===========================
   let _invPanelSort = 'newest';
-  // Sort invoices by date (createdAt ms, else parse "YYYY/MM/DD").
   function _invPanelTs(inv) {
     if (inv.createdAt != null) {
       const c = typeof inv.createdAt === 'number' ? inv.createdAt : Date.parse(inv.createdAt);
       if (!isNaN(c)) return c;
     }
-    if (inv.date) { const d = Date.parse(String(inv.date).replace(/\//g,'-')); if (!isNaN(d)) return d; }
+    if (inv.date) { const d = Date.parse(String(inv.date).replace(/\//g,'-')); if (!isNaN(d) && d > 0) return d; }
     return 0;
   }
   function _invPanelSorted() {
@@ -6542,8 +6379,6 @@ ${bodyHTML}
       quotation: ['badge-gray','عرض سعر'],
     };
     document.getElementById('inv-panel-tbody').innerHTML = list.map((r, i) => {
-      // Historical record: show each invoice in its OWN recorded currency, never
-      // reconverted to the current base currency (uses the frozen _fmtInvAmount).
       const amount = _fmtInvAmount(r);
       return `
       <tr>
@@ -6573,10 +6408,9 @@ ${bodyHTML}
     if (!ids.length) { showToast('warning', 'حدّد فاتورة واحدة على الأقل'); return; }
     printInvoicesByIds(ids);
   };
-  // Build a printable block for one invoice (with optional trailing page break).
   function _invoicePrintBlock(inv, pageBreak) {
     const statusMap = { paid:'مدفوعة', pending:'معلقة', overdue:'متأخرة', draft:'مسودة', quotation:'عرض سعر' };
-    const f = (v) => window.Currency ? window.Currency.format(v || 0, inv.currency) : (Number(v)||0).toLocaleString('ar-SY') + ' ل.س';
+    const f = (v) => window.Currency ? window.Currency.formatCompact(v || 0, inv.currency) : (Number(v)||0).toLocaleString('en-US') + ' ل.س';
     const itemsTable = (Array.isArray(inv.items) && inv.items.length)
       ? `<table style="margin-top:10px;">
            <thead><tr><th>المنتج/الخدمة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
@@ -6615,21 +6449,16 @@ ${bodyHTML}
     const inv = (window._invoices || []).find(x => x.id === id);
     if (!inv) { showToast('error', 'الفاتورة غير موجودة'); return; }
 
-    // Switch modal title and save button to edit mode
     const titleEl = document.querySelector('#new-invoice-modal .modal-title');
     if (titleEl) titleEl.textContent = `تعديل الفاتورة ${id}`;
 
-    // Mark the modal with the invoice id being edited
     const modal = document.getElementById('new-invoice-modal');
     if (modal) modal.dataset.editId = id;
 
-    // Populate header fields
     const cl = document.getElementById('inv-client'); if (cl) cl.value = inv.client || '';
-    // Convert stored YYYY/MM/DD to YYYY-MM-DD for the date input
     const dt = document.getElementById('inv-date');
-    if (dt) dt.value = (inv.date || '').replace(/\//g, '-');
+    if (dt) dt.value = (inv.date || '').replace(/\//g,'-');
 
-    // Map stored Arabic method label back to select value
     const methodReverseMap = { 'نقد':'نقد', 'تحويل بنكي':'بنك', 'POS / بطاقة':'POS', 'cash':'نقد', 'bank':'بنك', 'pos':'POS' };
     const mt = document.getElementById('inv-method');
     if (mt) mt.value = methodReverseMap[inv.method] || 'نقد';
@@ -6637,7 +6466,6 @@ ${bodyHTML}
     const cu = document.getElementById('inv-currency');
     if (cu) cu.value = inv.currency || 'SYP';
 
-    // Populate items — if invoice has items array use it, else put total as one line
     const tbody = document.getElementById('invoice-items');
     if (tbody) {
       if (Array.isArray(inv.items) && inv.items.length) {
@@ -6650,7 +6478,6 @@ ${bodyHTML}
           <td><button type="button" class="btn btn-ghost btn-sm" onclick="removeInvoiceItem(this)">🗑️</button></td>
         </tr>`).join('');
       } else {
-        // Fallback: single line with total as price
         tbody.innerHTML = `<tr class="inv-item-row">
           <td><input type="text" class="form-input" style="height:36px;" placeholder="اسم المنتج أو الخدمة" value="خدمات" /></td>
           <td><input type="number" class="form-input" style="height:36px;width:80px;" value="1" min="1" oninput="calcInvoiceTotal()" /></td>
@@ -6662,23 +6489,17 @@ ${bodyHTML}
       }
     }
 
-    // Notes
     const nt = document.getElementById('inv-notes'); if (nt) nt.value = inv.notes || '';
 
-    // Populate customers datalist
     const dl = document.getElementById('customers-datalist');
     if (dl && window._customers) dl.innerHTML = window._customers.map(c => `<option value="${c.name}">`).join('');
 
-    // Populate rep selector and pre-select the invoice's rep
     if (typeof window.populateInvoiceRepSelect === 'function') window.populateInvoiceRepSelect(inv.rep || inv.cashier || '');
 
     calcInvoiceTotal();
     openModal('new-invoice-modal');
   };
 
-  // ===========================
-  // INVOICE FORM LOGIC
-  // ===========================
   window.calcInvoiceTotal = function() {
     const cur = document.getElementById('inv-currency')?.value || 'SYP';
     const sym = window.Currency ? window.Currency.symbol(cur) : 'ل.س';
@@ -6691,7 +6512,7 @@ ${bodyHTML}
       const line  = qty * price * (1 - disc / 100);
       sub += line;
       const cell = row.querySelector('.inv-row-total');
-      if (cell) cell.textContent = line.toLocaleString('ar-SY') + ' ' + sym;
+      if (cell) cell.textContent = line.toLocaleString('en-US') + ' ' + sym;
     });
     const method = document.getElementById('inv-method')?.value || 'cash';
     const posPct = method === 'pos' ? (parseFloat(window._appSettings?.posDiscount) || 0) : 0;
@@ -6700,9 +6521,9 @@ ${bodyHTML}
     const subEl   = document.getElementById('inv-subtotal');
     const discEl  = document.getElementById('inv-discount-amount');
     const grandEl = document.getElementById('inv-grand-total');
-    if (subEl)   subEl.textContent   = sub.toLocaleString('ar-SY') + ' ' + sym;
-    if (discEl)  discEl.textContent  = discAmt > 0 ? `- ${discAmt.toLocaleString('ar-SY')} ${sym}` : '0 ' + sym;
-    if (grandEl) grandEl.textContent = grand.toLocaleString('ar-SY') + ' ' + sym;
+    if (subEl)   subEl.textContent   = sub.toLocaleString('en-US') + ' ' + sym;
+    if (discEl)  discEl.textContent  = discAmt > 0 ? `- ${discAmt.toLocaleString('en-US')} ${sym}` : '0 ' + sym;
+    if (grandEl) grandEl.textContent = grand.toLocaleString('en-US') + ' ' + sym;
   };
 
   window.onInvMethodChange = function(method) {
@@ -6761,21 +6582,14 @@ ${bodyHTML}
     const notes     = document.getElementById('inv-notes')?.value.trim() || '';
     const rep       = document.getElementById('inv-rep')?.value.trim() || '';
 
-    // Check if editing an existing invoice
     const modal   = document.getElementById('new-invoice-modal');
     const editId  = modal ? modal.dataset.editId : null;
 
-    // Freeze the exchange rate at creation time so the invoice is a complete
-    // historical record. Display already pins amount+currency; these fields keep
-    // the rate that was in effect for auditing / future reference.
     const fxRate     = (window.Currency && window.Currency.rate)     || 0;
     const fxUsdToTry = (window.Currency && window.Currency.usdToTry) || 0;
 
     let savedId;
     if (editId) {
-      // Update existing invoice in-place. Preserve the ORIGINAL fx snapshot if it
-      // already exists (the invoice was first recorded then) — only stamp a rate
-      // for legacy invoices that never had one.
       const idx = (window._invoices || []).findIndex(x => x.id === editId);
       if (idx !== -1) {
         const prev = window._invoices[idx] || {};
@@ -6791,7 +6605,6 @@ ${bodyHTML}
       savedId = editId;
       if (modal) delete modal.dataset.editId;
     } else {
-      // Create new invoice
       const prefix = 'fatura';
       savedId = `${prefix}-${Date.now().toString().slice(-4)}`;
       const inv = { id:savedId, client, amount:total, total, currency, method:methodMap[method]||method, status, date:date.replace(/-/g,'/'), items, notes, rep,
@@ -6802,22 +6615,18 @@ ${bodyHTML}
 
     window._saveData();
 
-    // Sync this one invoice to its Firestore document (accounts/{uid}/invoices/{id}).
-    // Same per-document path the cashier's checkout() uses — never the whole array.
     const savedInv = (window._invoices || []).find(x => x.id === savedId);
     if (savedInv && window.OfflineDB && typeof window.OfflineDB.enqueue === 'function') {
       window.OfflineDB.enqueue({ type: 'INSERT', collection: 'accounts/' + _acctKey() + '/invoices', data: savedInv })
         .catch(e => console.warn('[FS] invoice sync failed', e));
     }
 
-    // Refresh the table row (re-render the sales module for simplicity)
     if (typeof navigate === 'function') navigate('sales');
 
     closeModal('new-invoice-modal');
     const lbl = status === 'draft' ? 'المسودة' : 'الفاتورة';
     showToast('success',`تم حفظ ${lbl} ${savedId} بنجاح ✓`);
 
-    // Reset modal title and form
     const titleEl = document.querySelector('#new-invoice-modal .modal-title');
     if (titleEl) titleEl.textContent = 'إنشاء فاتورة جديدة';
     const cl = document.getElementById('inv-client'); if (cl) cl.value = '';
@@ -6841,9 +6650,6 @@ ${bodyHTML}
     const ntEl = document.getElementById('inv-notes'); if (ntEl) ntEl.value = '';
   };
 
-  // ===========================
-  // INVOICES PDF EXPORT
-  // ===========================
   window.exportInvoicesPDF = function() {
     const statusMap = { paid:'مدفوعة', pending:'معلقة', overdue:'متأخرة', draft:'مسودة', quotation:'عرض سعر' };
     const badgeMap  = { paid:'badge-paid', pending:'badge-pending', overdue:'badge-overdue', draft:'badge-draft', quotation:'badge-draft' };
@@ -6856,8 +6662,6 @@ ${bodyHTML}
         <td>${inv.method}</td>
         <td><span class="badge ${badgeMap[inv.status]||'badge-draft'}">${statusMap[inv.status]||inv.status}</span></td>
       </tr>`).join('');
-    // Per-invoice amounts are frozen in their own currency. The grand total is an
-    // aggregate, so it's summed into the base currency for a single coherent figure.
     const total = _fmt(_sumBase((window._invoices||[]).map(i => ({ amount: i.amount||0, currency: i.currency||'SYP' }))),
                        window.Currency ? window.Currency.base : 'SYP');
     generatePDF('تقرير الفواتير والمبيعات', `
@@ -6871,9 +6675,6 @@ ${bodyHTML}
     `);
   };
 
-  // ===========================
-  // ACCOUNTING MODULE
-  // ===========================
   window.switchAccTab = function(btn, tab) {
     ['journal','chart','pl','balance'].forEach(t => {
       const el = document.getElementById(`acc-tab-${t}`);
@@ -6884,14 +6685,12 @@ ${bodyHTML}
     btn.classList.add('active');
   };
 
-  // ── Accounting: convert any {amount,currency} to base ──
   function _accConv(amount, cur) {
     const base = window.Currency ? window.Currency.base : 'SYP';
     return window.Currency ? window.Currency.convert(Number(amount) || 0, cur || 'SYP', base)
                            : (Number(amount) || 0);
   }
 
-  // ── Accounting: compute all real figures from the business data ──
   function _accComputed() {
     const invoices  = window._invoices  || [];
     const expenses  = window._expenses  || [];
@@ -6906,7 +6705,6 @@ ${bodyHTML}
     const expensesBase = _sumBase(expenses);
     const debtUnpaid   = _creditDebtUnpaid();
 
-    // Manual journal entries (income via debit, expense via credit)
     const manualIncome  = entries.filter(e => e.type === 'income')
       .reduce((s, e) => s + _accConv(e.debit, e.currency), 0);
     const manualExpense = entries.filter(e => e.type === 'expense')
@@ -6915,17 +6713,14 @@ ${bodyHTML}
     // Cost of goods sold (تكلفة البضاعة المباعة)
     const cogs = _cogsBase();
 
-    // Expense breakdown by category
     const catSum = (m) => _sumBase(expenses.filter(e => m(String(e.category || ''))));
     const salaries = catSum(c => c.includes('راتب'));
     const rent     = catSum(c => c.includes('إيجار'));
     const operating = Math.max(0, expensesBase - salaries - rent);
 
-    // Inventory value (stock × cost)
     const inventory = products.reduce(
       (s, p) => s + _accConv((Number(p.stock) || 0) * (Number(p.cost) || 0), p.currency), 0);
 
-    // Unpaid (pending) purchases = accounts payable
     const payables = _sumBase(
       purchases.filter(p => p.status === 'pending')
                .map(p => ({ amount: p.amount != null ? p.amount : p.total, currency: p.currency || 'SYP' })));
@@ -6935,7 +6730,6 @@ ${bodyHTML}
     const profit  = income - expense;                        // = مبيعات − تكلفة − مصاريف
     const cash    = salesBase + deposits - withdrawals - expensesBase - debtUnpaid + manualIncome - manualExpense;
 
-    // Balance sheet (retained earnings balances the equation)
     const totalAssets = cash + debtUnpaid + inventory;
     const capital     = deposits;
     const retained    = totalAssets - payables - capital;
@@ -6949,7 +6743,6 @@ ${bodyHTML}
     };
   }
 
-  // ── Accounting: build the journal from every real transaction + manual entries ──
   function _accJournal() {
     const rows = [];
     (window._invoices || []).forEach(inv => {
@@ -7014,24 +6807,20 @@ ${bodyHTML}
     const set  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const money = (v) => _fmt(v, base);
 
-    // KPIs
     set('acc-kpi-income',  money(c.income));
     set('acc-kpi-expense', money(c.expense));
     set('acc-kpi-profit',  money(c.profit));
     set('acc-kpi-cash',    money(c.cash));
 
-    // Profit colour
     const kp = document.getElementById('acc-kpi-profit');
     if (kp) kp.style.color = c.profit >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    // P&L
     set('pl-income',  money(c.income));
     set('pl-expense', money(c.expense));
     set('pl-profit',  money(c.profit));
     const pp = document.getElementById('pl-profit');
     if (pp) pp.style.color = c.profit >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    // Chart of Accounts
     set('acc-cash',      money(c.cash));
     set('acc-bank',      money(0));
     set('acc-recv',      money(c.receivable));
@@ -7049,7 +6838,6 @@ ${bodyHTML}
     set('acc-exp-sal',   money(c.salaries));
     set('acc-exp-rent',  money(c.rent));
 
-    // Balance Sheet
     set('bs-cash',         money(c.cash));
     set('bs-recv',         money(c.receivable));
     set('bs-inv',          money(c.inventory));
@@ -7060,7 +6848,6 @@ ${bodyHTML}
     set('bs-retained',     money(c.retained));
     set('bs-liabeq-total', money(c.totalLiab + c.capital + c.retained));
 
-    // Journal
     const tbody = document.getElementById('entries-tbody');
     if (tbody) tbody.innerHTML = _accJournalRows();
   };
@@ -7141,9 +6928,6 @@ ${bodyHTML}
     `);
   };
 
-  // ===========================
-  // REPORTS PDF
-  // ===========================
   window.setReportRange = function(type) {
     const now = new Date();
     const fmt = d => {
@@ -7159,7 +6943,7 @@ ${bodyHTML}
       from = fmt(y); to = fmt(y);
     } else if (type === 'week') {
       const d = new Date(now);
-      d.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
+      d.setDate(now.getDate() - ((now.getDay() + 6) % 7));
       from = fmt(d);
     } else if (type === 'month') {
       from = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -7195,8 +6979,7 @@ ${bodyHTML}
     const statusMap = { paid:'مدفوعة', pending:'معلقة', overdue:'متأخرة', draft:'مسودة', quotation:'عرض سعر' };
     const bm        = { paid:'badge-paid', pending:'badge-pending', overdue:'badge-overdue', draft:'badge-draft' };
 
-    // Date filter helper — invoice dates are "YYYY/MM/DD", input values are "YYYY-MM-DD"
-    const normD = s => (s || '').replace(/\//g, '-');
+    const normD = s => (s || '').replace(/\//g,'-');
     const inRange = inv => {
       if (!from && !to) return true;
       const d = normD(inv.date);
@@ -7210,7 +6993,7 @@ ${bodyHTML}
         headers: ['#','العميل','التاريخ','المبلغ','طريقة الدفع','الحالة'],
         rows: (window._invoices||[]).filter(i=>i.status!=='draft' && i.status!=='quotation' && inRange(i)).map((inv,idx) =>
           `<tr><td>${idx+1}</td><td>${inv.client}</td><td>${inv.date}</td>
-           <td style="font-weight:700;">${(inv.amount||0).toLocaleString('ar-SY')} ل.س</td>
+           <td style="font-weight:700;">${(inv.amount||0).toLocaleString('en-US')} ل.س</td>
            <td>${_fmtMethodCur(inv)}</td>
            <td><span class="badge ${bm[inv.status]||'badge-draft'}">${statusMap[inv.status]||inv.status}</span></td></tr>`)
       },
@@ -7253,14 +7036,14 @@ ${bodyHTML}
       tax: {
         headers: ['الفترة','إجمالي المبيعات','الضريبة المستحقة (11%)'],
         rows: [ `<tr><td>${new Date().toLocaleDateString('ar-SY')}</td>
-                 <td>${(window._invoices||[]).reduce((s,i)=>s+(i.amount||0),0).toLocaleString('ar-SY')} ل.س</td>
-                 <td>${((window._invoices||[]).reduce((s,i)=>s+(i.amount||0),0)*0.11).toLocaleString('ar-SY')} ل.س</td></tr>` ]
+                 <td>${(window._invoices||[]).reduce((s,i)=>s+(i.amount||0),0).toLocaleString('en-US')} ل.س</td>
+                 <td>${((window._invoices||[]).reduce((s,i)=>s+(i.amount||0),0)*0.11).toLocaleString('en-US')} ل.س</td></tr>` ]
       },
       overdue: {
         headers: ['#','العميل','رقم الفاتورة','التاريخ','المبلغ'],
         rows: (window._invoices||[]).filter(i=>i.status==='overdue').map((inv,idx) =>
           `<tr><td>${idx+1}</td><td>${inv.client}</td><td style="font-weight:700;color:#dc2626;">${inv.id}</td>
-           <td>${inv.date}</td><td style="font-weight:700;">${(inv.amount||0).toLocaleString('ar-SY')} ل.س</td></tr>`)
+           <td>${inv.date}</td><td style="font-weight:700;">${(inv.amount||0).toLocaleString('en-US')} ل.س</td></tr>`)
       }
     };
 
@@ -7278,11 +7061,6 @@ ${bodyHTML}
     `);
   };
 
-
-  // ===========================
-  // GLOBAL UI FUNCTIONS
-  // ===========================
-
   function showLoading(show) {
     document.getElementById('loading-overlay').classList.toggle('active', show);
   }
@@ -7291,10 +7069,20 @@ ${bodyHTML}
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
+    el.style.cursor = 'pointer';
+    el.title = 'اضغط للإغلاق';
     const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
-    el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+    el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span><span class="toast-close">✕</span>`;
+    let dismissed = false;
+    function dismiss() {
+      if (dismissed) return;
+      dismissed = true;
+      el.classList.add('removing');
+      setTimeout(() => el.remove(), 300);
+    }
+    el.addEventListener('click', dismiss);
+    setTimeout(dismiss, 4000);
     container.appendChild(el);
-    setTimeout(() => { el.classList.add('removing'); setTimeout(() => el.remove(), 300); }, 3500);
   }
 
   function openModal(id)  { const el = document.getElementById(id); if (el) el.classList.add('open'); }
@@ -7317,7 +7105,6 @@ ${bodyHTML}
     document.getElementById('sidebarOverlay').classList.remove('show');
   }
 
-  // Accordion: toggle a sidebar group; opening one closes the others.
   window.toggleNavGroup = function(headerEl) {
     const group = headerEl.closest('.sidebar-group');
     if (!group) return;
@@ -7326,20 +7113,16 @@ ${bodyHTML}
     if (willOpen) group.classList.add('open');
   };
 
-  // Open the accordion group that contains the given module (closes others).
   function openGroupForModule(module) {
     const item = document.querySelector(`.sidebar-item[data-module="${module}"]`);
     const group = item && item.closest('.sidebar-group');
-    if (!group) return; // standalone items (dashboard/POS) keep current state
+    if (!group) return;
     document.querySelectorAll('.sidebar-group').forEach(g => {
       g.classList.toggle('open', g === group);
     });
   }
   window.openGroupForModule = openGroupForModule;
 
-  // ===========================
-  // GLOBAL SEARCH
-  // ===========================
   const _searchModules = [
     { label:'لوحة التحكم',               icon:'📊', key:'dashboard',    tags:['dashboard','لوحة','تحكم','رئيسية'] },
     { label:'إدارة العملاء',             icon:'👥', key:'crm',          tags:['crm','عملاء','زبائن','عميل'] },
@@ -7414,7 +7197,6 @@ ${bodyHTML}
     navigate(key);
   };
 
-  // Close search dropdown when clicking outside
   document.addEventListener('click', e => {
     if (!e.target.closest('#global-search') && !e.target.closest('#global-search-dropdown')) {
       const dd = document.getElementById('global-search-dropdown');
@@ -7443,9 +7225,6 @@ ${bodyHTML}
     document.getElementById('user-menu')?.classList.remove('open');
   }
 
-  // ===========================
-  // CURRENCY CONTROL
-  // ===========================
   window.updateCurrencyLabel = function() {
     const el = document.getElementById('currency-label');
     if (el && window.Currency) el.textContent = window.Currency.symbol(window.Currency.base);
@@ -7458,13 +7237,16 @@ ${bodyHTML}
     const modeEl = document.getElementById('cur-mode');
     const rateEl = document.getElementById('cur-rate');
     const metaEl = document.getElementById('cur-rate-meta');
+    const tryEl  = document.getElementById('cur-try-rate');
     if (baseEl) baseEl.value = C.base;
     if (modeEl) modeEl.value = C.mode;
     if (rateEl) rateEl.value = C.rate || '';
+    if (tryEl)  tryEl.value  = C.usdToTry || '';
+    onCurrencyBaseChange(C.base);
     onCurrencyModeChange(C.mode);
     if (metaEl) {
       metaEl.textContent = C.updatedAt
-        ? `آخر تحديث: ${new Date(C.updatedAt).toLocaleString('ar-SY')}`
+        ? `آخر تحديث: ${new Date(C.updatedAt).toLocaleString('en-US')}`
         : 'لم يُحدّد سعر صرف بعد';
     }
   }
@@ -7484,6 +7266,13 @@ ${bodyHTML}
     if (fetchBtn) fetchBtn.style.display = (mode === 'auto') ? '' : 'none';
   };
 
+  window.onCurrencyBaseChange = function(base) {
+    const sypWrap = document.getElementById('cur-syp-rate-wrap');
+    const tryWrap = document.getElementById('cur-try-rate-wrap');
+    if (sypWrap) sypWrap.style.display = '';
+    if (tryWrap) tryWrap.style.display = (base === 'TRY') ? '' : 'none';
+  };
+
   window.fetchAutoRate = async function() {
     if (!window.Currency) return;
     const btn = document.getElementById('cur-fetch-btn');
@@ -7493,79 +7282,185 @@ ${bodyHTML}
     if (r) {
       const rateEl = document.getElementById('cur-rate');
       if (rateEl) rateEl.value = r;
-      showToast('success', `تم جلب سعر الصرف: 1$ = ${r.toLocaleString('ar-SY')} ل.س`);
+      showToast('success', `تم جلب سعر الصرف: 1$ = ${r.toLocaleString('en-US')} ل.س`);
     } else {
       showToast('warning', 'تعذّر جلب السعر تلقائياً — يرجى إدخاله يدوياً');
     }
   };
 
-  // Auto-fetch USD→SYP once per page load (when the dashboard first opens),
-  // then apply it and re-render so all amounts reflect today's rate.
+  window.fetchAutoTryRate = async function() {
+    if (!window.Currency) return;
+    const btn  = document.getElementById('cur-try-fetch-btn');
+    const meta = document.getElementById('cur-try-rate-meta');
+    if (btn) { btn.disabled = true; btn.textContent = '...جاري'; }
+    const r = await window.Currency.fetchAutoTry();
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 جلب'; }
+    if (r) {
+      const rateEl = document.getElementById('cur-try-rate');
+      if (rateEl) rateEl.value = r;
+      if (meta) meta.textContent = `آخر تحديث: ${new Date().toLocaleString('en-US')}`;
+      showToast('success', `تم جلب سعر الليرة التركية: 1$ = ${r.toLocaleString('en-US')} ₺`);
+    } else {
+      showToast('warning', 'تعذّر جلب سعر الليرة التركية — يرجى إدخاله يدوياً');
+    }
+  };
+
   let _rateAutoFetched = false;
   window.autoFetchRateOnce = async function() {
     if (_rateAutoFetched) return;
     _rateAutoFetched = true;
     if (!window.Currency || typeof window.Currency.fetchAuto !== 'function') return;
     try {
-      const r = await window.Currency.fetchAuto();   // sets rate + mode + persists
-      if (!r || r <= 0) return;
+      const [r, rTry] = await Promise.all([
+        window.Currency.fetchAuto(),
+        window.Currency.fetchAutoTry(),
+      ]);
       if (typeof updateCurrencyLabel === 'function') updateCurrencyLabel();
-      const rateEl = document.getElementById('cur-rate');
-      if (rateEl) rateEl.value = r;
-      if (typeof showToast === 'function')
-        showToast('success', `سعر الصرف اليوم: 1$ = ${r.toLocaleString('ar-SY')} ل.س ✓`);
-      // Re-render the current view so converted amounts update immediately.
+      if (r && r > 0) {
+        const rateEl = document.getElementById('cur-rate');
+        if (rateEl) rateEl.value = r;
+      }
+      if (rTry && rTry > 0) {
+        const tryEl = document.getElementById('cur-try-rate');
+        if (tryEl) tryEl.value = rTry;
+      }
+      if (r && r > 0 && typeof showToast === 'function')
+        showToast('success', `سعر الصرف اليوم: 1$ = ${r.toLocaleString('en-US')} ل.س | ${rTry ? rTry.toLocaleString('en-US') + ' ₺' : ''} ✓`);
       const hash = (window.location.hash.replace('#', '')) || 'dashboard';
       if (typeof window.navigate === 'function') window.navigate(hash);
-    } catch (e) { /* keep existing/manual rate on failure */ }
+    } catch (e) { }
   };
 
   window.applyCurrencySettings = function() {
     if (!window.Currency) return;
     const C = window.Currency;
-    const base = document.getElementById('cur-base')?.value || 'SYP';
-    const mode = document.getElementById('cur-mode')?.value || 'manual';
-    const rate = parseFloat(document.getElementById('cur-rate')?.value);
-    if ((base === 'USD' || (rate && rate > 0)) && (!rate || rate <= 0)) {
-      // base USD with no rate is fine only if no USD amounts; warn softly
-    }
-    if (rate && rate > 0) C.setRate(rate);
+    const base    = document.getElementById('cur-base')?.value || 'SYP';
+    const mode    = document.getElementById('cur-mode')?.value || 'manual';
+    const rate    = parseFloat(document.getElementById('cur-rate')?.value);
+    const tryRate = parseFloat(document.getElementById('cur-try-rate')?.value);
+    if (rate    && rate    > 0) C.setRate(rate);
+    if (tryRate && tryRate > 0) C.setUsdToTry(tryRate);
     C.setMode(mode);
     C.setBase(base);
     updateCurrencyLabel();
     document.getElementById('currency-panel')?.classList.remove('open');
     showToast('success', `العملة الأساسية: ${C.symbol(base)} ✓`);
-    // Re-render current module so all amounts convert immediately
     const hash = window.location.hash.replace('#','') || 'dashboard';
     if (typeof window.navigate === 'function') window.navigate(hash);
   };
 
-  // ===========================
-  // DASHBOARD PIN GATE
-  // ===========================
   function _resolveDashboardPin() {
-    // Per-account PIN key — isolated per user
     const pinKey = 'a3mali_pin_' + _acctKey();
     let pin = localStorage.getItem(pinKey);
     if (pin) return pin;
-    // Fallback: PIN synced from Firestore into settings. Read settings FRESH from
-    // localStorage — right after the first login, window._appSettings is still the
-    // empty copy loaded at parse time (before Firestore hydrate populated it), so
-    // relying on it would skip the lock until the page is refreshed.
     const s = _loadAcct('settings', {}) || window._appSettings || {};
     if (s && s.pin) {
-      localStorage.setItem(pinKey, s.pin);  // restore local key
+      localStorage.setItem(pinKey, s.pin);
       return s.pin;
     }
     return null;
   }
 
-  // Returns true if access is allowed (no PIN set, or already unlocked).
-  // Otherwise shows the lock overlay and returns false.
+  window.showEntryChoicePopup = function() {
+    return new Promise(function(resolve) {
+      const ov        = document.getElementById('entry-choice-overlay');
+      const scChoice  = document.getElementById('entry-screen-choice');
+      const scPin     = document.getElementById('entry-screen-pin');
+      const pinInp    = document.getElementById('entry-pin-input');
+      const pinErr    = document.getElementById('entry-pin-error');
+
+      if (!ov) { resolve('dashboard'); return; }
+
+      if (scChoice) scChoice.style.display = 'block';
+      if (scPin)    scPin.style.display    = 'none';
+      if (pinInp)   pinInp.value           = '';
+      if (pinErr)   pinErr.style.display   = 'none';
+      ov.style.opacity   = '';
+      ov.style.transition = '';
+      ov.style.display   = 'flex';
+
+      function finish(choice) {
+        ov.style.transition = 'opacity .22s';
+        ov.style.opacity    = '0';
+        setTimeout(function() {
+          ov.style.display    = 'none';
+          ov.style.opacity    = '';
+          ov.style.transition = '';
+          resolve(choice);
+        }, 240);
+      }
+
+      window._entryChooseOption = function(choice) { finish(choice); };
+
+      window._entryShowPin = async function() {
+        const dashBtn = document.getElementById('entry-btn-dashboard');
+        if (dashBtn) { dashBtn.disabled = true; dashBtn.style.opacity = '0.6'; }
+
+        if (typeof window._fsGet === 'function') {
+          try {
+            const acctKey = _acctKey();
+            const pinKey  = 'a3mali_pin_' + acctKey;
+            let firestorePin = null;
+
+            const userSnap = await window._fsGet('users/' + acctKey);
+            if (userSnap && userSnap.exists && userSnap.exists()) {
+              const d = userSnap.data();
+              if (d && (d.localPin || d.dashboardPin))
+                firestorePin = String(d.localPin || d.dashboardPin);
+            }
+
+            if (!firestorePin) {
+              const settingsSnap = await window._fsGet('accounts/' + acctKey + '/data/settings');
+              if (settingsSnap && settingsSnap.exists && settingsSnap.exists()) {
+                const d = settingsSnap.data();
+                if (d && d.pin) firestorePin = String(d.pin);
+              }
+            }
+
+            if (firestorePin) {
+              localStorage.setItem(pinKey, firestorePin);
+            } else {
+              localStorage.removeItem(pinKey);
+            }
+          } catch(e) {
+            console.log('[PIN] Offline — using cached PIN from localStorage');
+          }
+        }
+
+        if (dashBtn) { dashBtn.disabled = false; dashBtn.style.opacity = ''; }
+
+        const pin = _resolveDashboardPin();
+        if (!pin) { finish('dashboard'); return; }
+        if (scChoice) scChoice.style.display = 'none';
+        if (scPin)    scPin.style.display    = 'block';
+        setTimeout(function() { if (pinInp) pinInp.focus(); }, 80);
+      };
+
+      window._entryBackToChoice = function() {
+        if (scPin)    scPin.style.display    = 'none';
+        if (scChoice) scChoice.style.display = 'block';
+        if (pinInp)   pinInp.value           = '';
+        if (pinErr)   pinErr.style.display   = 'none';
+      };
+
+      window._entryVerifyPin = function() {
+        const entered = (pinInp ? pinInp.value : '').trim();
+        const pin     = _resolveDashboardPin();
+        if (entered && pin && entered === pin) {
+          window.__pinUnlocked = true;
+          finish('dashboard');
+        } else {
+          if (pinErr) pinErr.style.display = 'block';
+          if (pinInp) { pinInp.value = ''; pinInp.focus(); }
+        }
+      };
+    });
+  };
+
   window.requireDashboardPin = function() {
     const pin = _resolveDashboardPin();
-    if (!pin) return true;                                     // no PIN configured
-    if (window.__pinUnlocked === true) return true;            // unlocked this page load only (cleared on every refresh)
+    if (!pin) return true;
+    if (window.__pinUnlocked === true) return true;
     const ov = document.getElementById('pin-lock-overlay');
     if (ov) {
       ov.style.display = 'flex';
@@ -7580,7 +7475,7 @@ ${bodyHTML}
     const entered = (inp?.value || '').trim();
     const pin = _resolveDashboardPin();
     if (entered && entered === pin) {
-      window.__pinUnlocked = true;   // in-memory only — refreshing the page clears it and re-prompts
+      window.__pinUnlocked = true;
       const ov = document.getElementById('pin-lock-overlay');
       if (ov) ov.style.display = 'none';
       if (err) err.style.display = 'none';
@@ -7661,12 +7556,6 @@ ${bodyHTML}
     setTimeout(() => { if (typeof settingsTab === 'function') settingsTab(5); }, 150);
   };
 
-  // ===========================
-  // LIVE SYNC FROM CASHIER
-  // storage event fires in any other open tab when localStorage is written.
-  // The POS already writes invoices/products/stockMoves/debts after every sale,
-  // so we just listen here and refresh the current module — zero extra infra needed.
-  // ===========================
   window.addEventListener('storage', function(e) {
     if (!e.key || !e.newValue) return;
     const acctKey = _acctKey();
@@ -7695,28 +7584,22 @@ ${bodyHTML}
       window.updateSalesBadge();
     }
 
-    // Flash sync dot so the admin sees it's live
     document.querySelectorAll('.sync-indicator').forEach(el => el.classList.add('syncing'));
     setTimeout(() => document.querySelectorAll('.sync-indicator').forEach(el => el.classList.remove('syncing')), 1200);
 
-    // Don't yank screen from under admin mid-form or while modal is open
     const active = document.activeElement;
     const isTyping = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
     if (document.querySelector('.modal-overlay.open') || isTyping) return;
 
-    // Re-render whichever module is currently open
     const current = (window.location.hash || '#dashboard').replace('#', '') || 'dashboard';
     if (typeof window.navigate === 'function') window.navigate(current);
 
-    // Toast only for a new POS sale so it's not noisy
     if (entry.kind === 'invoices' && newData.length > prevLen) {
       showToast('success', '🏪 بيع جديد من الكاشير — تم التحديث تلقائياً');
     } else if (entry.kind === 'products' && newData.length === prevLen) {
-      // stock decrement from a sale — no toast, silent update
     }
   });
 
-  // Close panels on outside click
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#theme-menu') && !e.target.closest('#theme-btn')) {
       document.getElementById('theme-menu')?.classList.remove('open');
@@ -7730,21 +7613,16 @@ ${bodyHTML}
     if (!e.target.closest('#header-user-menu') && !e.target.closest('#header-avatar')) {
       document.getElementById('header-user-menu')?.classList.remove('open');
     }
-    // Close modals on overlay click
     document.querySelectorAll('.modal-overlay.open').forEach(overlay => {
       if (e.target === overlay) closeModal(overlay.id);
     });
   });
 
-  // Apply saved settings on load
   const savedTheme = localStorage.getItem('a3mali_theme') || 'light';
   applyTheme(savedTheme);
 
-  // Show loading initially
   showLoading(true);
 
-  // Safety fallback: if the content area is still showing the initial loading
-  // placeholder after 2.5s (navigate never ran), force-render from sessionStorage.
   setTimeout(() => {
     const content = document.getElementById('content');
     const stillLoading = content && content.textContent.includes('جارٍ التحميل');
@@ -7755,9 +7633,6 @@ ${bodyHTML}
         const hash = window.location.hash.replace('#','') || 'dashboard';
         window.navigate(hash);
       } else if (!demo) {
-        // Only redirect if Firebase also has no current user.
-        // This prevents a loop when onAuthStateChanged in login.html redirected here
-        // without setting sessionStorage (race condition on fresh sign-in).
         if (!(window.__auth && window.__auth.currentUser)) {
           window.location.href = 'login.html';
         }

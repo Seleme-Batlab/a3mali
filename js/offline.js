@@ -1,16 +1,12 @@
-// ============================================================
 //  أعمالي ERP — Offline-First Architecture
-//  Uses IndexedDB for local storage + sync queue
-// ============================================================
 
 const DB_NAME    = 'a3mali_offline';
 const DB_VERSION = 1;
 
-// Store names
 const STORES = {
-  CACHE:  'cache',   // Cached Firestore data
-  QUEUE:  'queue',   // Pending operations to sync
-  META:   'meta',    // Metadata (last sync time, etc.)
+  CACHE:  'cache',
+  QUEUE:  'queue',
+  META:   'meta',
 };
 
 export const OfflineDB = {
@@ -18,9 +14,6 @@ export const OfflineDB = {
   syncing: false,
   listeners: [],
 
-  // ===========================
-  // INITIALIZATION
-  // ===========================
   async init() {
     try {
       this.db = await this._openDB();
@@ -41,7 +34,6 @@ export const OfflineDB = {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
 
-        // Cache store — keyed by "collection/docId"
         if (!db.objectStoreNames.contains(STORES.CACHE)) {
           const cacheStore = db.createObjectStore(STORES.CACHE, { keyPath: 'key' });
           cacheStore.createIndex('collection', 'collection', { unique: false });
@@ -49,7 +41,6 @@ export const OfflineDB = {
           cacheStore.createIndex('updatedAt',  'updatedAt',  { unique: false });
         }
 
-        // Queue store — auto-increment id
         if (!db.objectStoreNames.contains(STORES.QUEUE)) {
           const queueStore = db.createObjectStore(STORES.QUEUE, { keyPath: 'queueId', autoIncrement: true });
           queueStore.createIndex('type',       'type',       { unique: false });
@@ -57,7 +48,6 @@ export const OfflineDB = {
           queueStore.createIndex('status',     'status',     { unique: false });
         }
 
-        // Meta store
         if (!db.objectStoreNames.contains(STORES.META)) {
           db.createObjectStore(STORES.META, { keyPath: 'key' });
         }
@@ -68,13 +58,6 @@ export const OfflineDB = {
     });
   },
 
-  // ===========================
-  // CACHE OPERATIONS
-  // ===========================
-
-  /**
-   * Save document to local cache
-   */
   async cacheDoc(collection, docId, data) {
     if (!this.db) return;
     const key = `${collection}/${docId}`;
@@ -88,9 +71,6 @@ export const OfflineDB = {
     });
   },
 
-  /**
-   * Get document from cache
-   */
   async getCachedDoc(collection, docId) {
     if (!this.db) return null;
     const key    = `${collection}/${docId}`;
@@ -98,16 +78,12 @@ export const OfflineDB = {
     return record ? record.data : null;
   },
 
-  /**
-   * Query cached collection
-   */
   async getCachedCollection(collection, filters = {}) {
     if (!this.db) return [];
 
     const all = await this._getAllByIndex(STORES.CACHE, 'collection', collection);
     let results = all.map(r => r.data);
 
-    // Apply filters
     if (filters.companyId) {
       results = results.filter(d => d.companyId === filters.companyId);
     }
@@ -141,21 +117,11 @@ export const OfflineDB = {
     return results;
   },
 
-  /**
-   * Remove document from cache
-   */
   async removeCachedDoc(collection, docId) {
     if (!this.db) return;
     return this._delete(STORES.CACHE, `${collection}/${docId}`);
   },
 
-  // ===========================
-  // SYNC QUEUE
-  // ===========================
-
-  /**
-   * Add operation to sync queue
-   */
   async enqueue(operation) {
     if (!this.db) return;
     const item = {
@@ -168,25 +134,18 @@ export const OfflineDB = {
     const queueId = await this._add(STORES.QUEUE, item);
     console.log(`[OfflineDB] Queued: ${operation.type} → ${operation.collection}`);
 
-    // Try to sync immediately if online
     if (navigator.onLine) {
       this.syncAll();
     }
     return queueId;
   },
 
-  /**
-   * Get all pending queue items
-   */
   async getPendingQueue() {
     if (!this.db) return [];
     const all = await this._getAllByIndex(STORES.QUEUE, 'status', 'pending');
     return all.sort((a, b) => a.queueId - b.queueId);
   },
 
-  /**
-   * Sync all pending operations to Firestore
-   */
   async syncAll() {
     if (this.syncing || !navigator.onLine) return;
     const queue = await this.getPendingQueue();
@@ -196,7 +155,7 @@ export const OfflineDB = {
     this._notifyListeners('syncing');
     console.log(`[OfflineDB] Syncing ${queue.length} queued operations...`);
 
-    const db = window.__db;  // Firestore instance
+    const db = window.__db;
     if (!db) { this.syncing = false; return; }
 
     const { doc, setDoc, updateDoc, deleteDoc, collection, serverTimestamp } =
@@ -233,7 +192,6 @@ export const OfflineDB = {
           }
         }
 
-        // Mark as synced
         await this._put(STORES.QUEUE, { ...item, status: 'synced', syncedAt: Date.now() });
         successCount++;
 
@@ -259,14 +217,6 @@ export const OfflineDB = {
     }
   },
 
-  // ===========================
-  // CONFLICT RESOLUTION
-  // ===========================
-
-  /**
-   * Resolve conflict: local wins (last-write-wins by default)
-   * Override this for custom conflict resolution
-   */
   resolveConflict(localData, remoteData) {
     const localUpdated  = new Date(localData.updatedAt || 0);
     const remoteUpdated = new Date(remoteData.updatedAt?.toDate?.() || remoteData.updatedAt || 0);
@@ -278,9 +228,6 @@ export const OfflineDB = {
     }
   },
 
-  // ===========================
-  // META
-  // ===========================
   async _setMeta(key, value) {
     return this._put(STORES.META, { key, value, updatedAt: Date.now() });
   },
@@ -290,9 +237,6 @@ export const OfflineDB = {
     return record ? record.value : null;
   },
 
-  // ===========================
-  // NETWORK LISTENERS
-  // ===========================
   _setupNetworkListeners() {
     window.addEventListener('online', () => {
       console.log('[OfflineDB] Back online — starting sync');
@@ -304,9 +248,6 @@ export const OfflineDB = {
     });
   },
 
-  // ===========================
-  // EVENT SYSTEM
-  // ===========================
   onSync(callback) {
     this.listeners.push(callback);
     return () => {
@@ -320,9 +261,6 @@ export const OfflineDB = {
     });
   },
 
-  // ===========================
-  // TOAST NOTIFICATION
-  // ===========================
   _showSyncToast(success, fail) {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -333,9 +271,6 @@ export const OfflineDB = {
     setTimeout(() => { el.classList.add('removing'); setTimeout(() => el.remove(), 300); }, 4000);
   },
 
-  // ===========================
-  // STORAGE STATS
-  // ===========================
   async getStats() {
     if (!this.db) return { cacheCount: 0, queueCount: 0, lastSync: null };
     const [cacheAll, queueAll, lastSync] = await Promise.all([
@@ -350,9 +285,6 @@ export const OfflineDB = {
     };
   },
 
-  // ===========================
-  // INDEXEDDB HELPERS
-  // ===========================
   _transaction(storeName, mode = 'readonly') {
     return this.db.transaction([storeName], mode).objectStore(storeName);
   },
