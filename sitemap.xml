@@ -3,7 +3,7 @@
 
   <!-- الصفحة الرئيسية (Landing Page) — أعلى أولوية -->
   <url>
-    <loc>https://a3mali.com/</loc>
+    <loc>https://a3mali.site/</loc>
     <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -11,7 +11,7 @@
 
   <!-- صفحة تسجيل الدخول وإنشاء الحساب -->
   <url>
-    <loc>https://a3mali.com/login.html</loc>
+    <loc>https://a3mali.site/login.html</loc>
     <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -19,7 +19,7 @@
 
   <!-- سياسة الخصوصية -->
   <url>
-    <loc>https://a3mali.com/privacy.html</loc>
+    <loc>https://a3mali.site/privacy.html</loc>
     <lastmod>2026-06-27</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
@@ -27,7 +27,7 @@
 
   <!-- شروط الاستخدام -->
   <url>
-    <loc>https://a3mali.com/terms.html</loc>
+    <loc>https://a3mali.site/terms.html</loc>
     <lastmod>2026-06-27</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>

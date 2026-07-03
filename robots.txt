@@ -29,4 +29,4 @@ Disallow: /firestore.rules
 Disallow: /js/config.js
 
 # --- خريطة الموقع ---
-Sitemap: https://a3mali.com/sitemap.xml
+Sitemap: https://a3mali.site/sitemap.xml
