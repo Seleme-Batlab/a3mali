@@ -3,14 +3,10 @@
    Stack: HTML5 + CSS3 + Vanilla JS + Firebase
 ============================================================ */
 
-/* Google Fonts — preloaded in HTML */
 @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* ============================================================
-   1. DESIGN TOKENS
-============================================================ */
 :root {
-  /* — Brand Colors — */
+  
   --blue-50:  #eff6ff; --blue-100: #dbeafe; --blue-200: #bfdbfe;
   --blue-300: #93c5fd; --blue-400: #60a5fa; --blue-500: #3b82f6;
   --blue-600: #2563eb; --blue-700: #1d4ed8; --blue-800: #1e40af; --blue-900: #1e3a8a;
@@ -33,7 +29,7 @@
   --slate-300: #cbd5e1; --slate-400: #94a3b8; --slate-500: #64748b;
   --slate-600: #475569; --slate-700: #334155; --slate-800: #1e293b; --slate-900: #0f172a;
 
-  /* — Semantic Light Theme — */
+  
   --bg:            #bdbdbd;   /* رمادي */
   --bg-2:          #bdbdbd;
   --surface:       #ffffff;
@@ -61,7 +57,7 @@
   --danger:        var(--red-600);
   --danger-light:  var(--red-50);
 
-  /* — Typography — */
+  
   --font-ar: 'Tajawal', 'Arial', 'Tahoma', sans-serif;
   --font-en: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font:    var(--font-ar);
@@ -78,14 +74,14 @@
   --text-6xl:  3.75rem;
   --text-7xl:  4.5rem;
 
-  /* — Spacing — */
+  
   --sp-1: .25rem;  --sp-2: .5rem;   --sp-3: .75rem;
   --sp-4: 1rem;    --sp-5: 1.25rem; --sp-6: 1.5rem;
   --sp-8: 2rem;    --sp-10: 2.5rem; --sp-12: 3rem;
   --sp-16: 4rem;   --sp-20: 5rem;   --sp-24: 6rem;
   --sp-32: 8rem;
 
-  /* — Radius — */
+  
   --r-sm:   .375rem;
   --r:      .5rem;
   --r-md:   .75rem;
@@ -94,7 +90,7 @@
   --r-2xl:  2rem;
   --r-full: 9999px;
 
-  /* — Shadows — */
+  
   --sh-xs: 0 1px 2px rgba(0,0,0,.05);
   --sh-sm: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
   --sh:    0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);
@@ -103,19 +99,19 @@
   --sh-xl: 0 25px 50px -12px rgba(0,0,0,.18);
   --sh-colored: 0 10px 30px -5px rgba(37,99,235,.35);
 
-  /* — Transitions — */
+  
   --tr-fast:  150ms ease;
   --tr:       200ms ease;
   --tr-slow:  300ms ease;
   --tr-ease:  400ms cubic-bezier(.4,0,.2,1);
 
-  /* — Layout — */
+  
   --sidebar-w:       260px;
   --sidebar-collapsed: 72px;
   --header-h:        64px;
   --container:       1280px;
 
-  /* — Z-Index — */
+  
   --z-100: 100;
   --z-200: 200;
   --z-300: 300;
@@ -123,9 +119,6 @@
   --z-500: 500;
 }
 
-/* ============================================================
-   2. DARK THEME
-============================================================ */
 [data-theme="dark"] {
   --bg:            var(--slate-900);
   --bg-2:          #090f1a;
@@ -272,14 +265,8 @@
   --sh-colored:    0 10px 30px -5px rgba(13,148,136,.35);
 }
 
-/* ============================================================
-   3. LANGUAGE OVERRIDE
-============================================================ */
 [data-lang="en"] { --font: var(--font-en); }
 
-/* ============================================================
-   4. RESET & BASE
-============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {
@@ -315,9 +302,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   color: var(--blue-900);
 }
 
-/* ============================================================
-   5. TYPOGRAPHY
-============================================================ */
 .text-xs   { font-size: var(--text-xs); }
 .text-sm   { font-size: var(--text-sm); }
 .text-base { font-size: var(--text-base); }
@@ -340,9 +324,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .text-warning { color: var(--warning); }
 .text-danger  { color: var(--danger); }
 
-/* ============================================================
-   6. LAYOUT UTILITIES
-============================================================ */
 .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--sp-6); }
 
 .flex       { display: flex; }
@@ -392,9 +373,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   text-overflow: ellipsis;
 }
 
-/* ============================================================
-   7. BUTTONS
-============================================================ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -419,7 +397,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .btn-lg { height: 48px; padding: 0 var(--sp-8); font-size: var(--text-base); }
 .btn-xl { height: 56px; padding: 0 var(--sp-10); font-size: var(--text-lg); border-radius: var(--r-md); }
 
-/* Primary */
 .btn-primary {
   background: var(--primary);
   color: #fff;
@@ -432,7 +409,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   box-shadow: var(--sh-colored);
 }
 
-/* Secondary */
 .btn-secondary {
   background: var(--surface);
   color: var(--text);
@@ -441,14 +417,12 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 }
 .btn-secondary:hover { background: var(--surface-2); border-color: var(--border-strong); }
 
-/* Ghost */
 .btn-ghost {
   background: transparent;
   color: var(--text-muted);
 }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 
-/* Danger */
 .btn-danger {
   background: var(--danger);
   color: #fff;
@@ -456,7 +430,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 }
 .btn-danger:hover { background: var(--red-700); }
 
-/* Success */
 .btn-success {
   background: var(--success);
   color: #fff;
@@ -464,7 +437,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 }
 .btn-success:hover { background: var(--green-700); }
 
-/* Outline variants */
 .btn-outline-primary {
   background: transparent;
   color: var(--primary);
@@ -480,9 +452,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .btn-icon.btn-sm { width: 32px; }
 .btn-icon.btn-lg { width: 48px; }
 
-/* ============================================================
-   8. BADGES
-============================================================ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -505,9 +474,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 [data-theme="dark"] .badge-warning { background: rgba(245,158,11,.2); color: #fcd34d; }
 [data-theme="dark"] .badge-danger  { background: rgba(239,68,68,.2);  color: #fc8181; }
 
-/* ============================================================
-   9. CARDS
-============================================================ */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -537,7 +503,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   border-radius: 0 0 var(--r-lg) var(--r-lg);
 }
 
-/* KPI Card */
 .kpi-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -583,9 +548,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .kpi-change.up   { color: var(--success); }
 .kpi-change.down { color: var(--danger); }
 
-/* ============================================================
-   10. FORMS
-============================================================ */
 .form-group { display: flex; flex-direction: column; gap: var(--sp-2); }
 
 .form-label {
@@ -658,7 +620,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-4); }
 
-/* Checkbox & Radio */
 .form-check {
   display: flex;
   align-items: center;
@@ -675,9 +636,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   flex-shrink: 0;
 }
 
-/* ============================================================
-   11. TABLES
-============================================================ */
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -724,9 +682,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 
 .table-actions { display: flex; align-items: center; gap: var(--sp-2); }
 
-/* ============================================================
-   12. MODALS
-============================================================ */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -809,9 +764,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   flex-shrink: 0;
 }
 
-/* ============================================================
-   13. TOAST NOTIFICATIONS
-============================================================ */
 #toast-container {
   position: fixed;
   top: var(--sp-5);
@@ -842,8 +794,10 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 
 .toast.removing { animation: toastOut var(--tr-slow) ease forwards; }
 
-.toast-icon { font-size: 1.25rem; flex-shrink: 0; }
-.toast-msg  { flex: 1; font-weight: 500; }
+.toast-icon  { font-size: 1.25rem; flex-shrink: 0; }
+.toast-msg   { flex: 1; font-weight: 500; }
+.toast-close { font-size: .85rem; opacity: .5; flex-shrink: 0; line-height: 1; padding: 2px 4px; border-radius: 4px; transition: opacity .15s; }
+.toast:hover .toast-close { opacity: 1; }
 
 .toast-success { border-inline-start: 3px solid var(--success); }
 .toast-error   { border-inline-start: 3px solid var(--danger); }
@@ -859,9 +813,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   to   { opacity: 0; transform: translateY(-12px); }
 }
 
-/* ============================================================
-   14. LOADING
-============================================================ */
 #loading-overlay {
   position: fixed;
   inset: 0;
@@ -890,9 +841,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ============================================================
-   15. DROPDOWN
-============================================================ */
 .dropdown { position: relative; }
 
 .dropdown-menu {
@@ -905,7 +853,7 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   border-radius: var(--r-lg);
   box-shadow: var(--sh-lg);
   padding: var(--sp-2);
-  z-index: var(--z-400); /* sit above content cards so header menus aren't hidden */
+  z-index: var(--z-400); 
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
@@ -938,9 +886,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 
 .dropdown-divider { height: 1px; background: var(--border); margin: var(--sp-2) 0; }
 
-/* ============================================================
-   16. PROGRESS BAR
-============================================================ */
 .progress {
   height: 6px;
   background: var(--surface-2);
@@ -958,9 +903,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .progress-sm { height: 4px; }
 .progress-lg { height: 10px; }
 
-/* ============================================================
-   17. TABS
-============================================================ */
 .tabs {
   display: flex;
   gap: var(--sp-1);
@@ -981,9 +923,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-/* ============================================================
-   18. EMPTY STATE
-============================================================ */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -998,9 +937,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .empty-title { font-size: var(--text-xl); font-weight: 700; color: var(--text); margin-bottom: var(--sp-2); }
 .empty-desc { font-size: var(--text-sm); margin-bottom: var(--sp-6); max-width: 320px; }
 
-/* ============================================================
-   19. AVATAR
-============================================================ */
 .avatar {
   border-radius: var(--r-full);
   display: flex;
@@ -1021,9 +957,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .avatar-lg  { width: 56px; height: 56px; font-size: var(--text-xl); }
 .avatar-xl  { width: 72px; height: 72px; font-size: var(--text-2xl); }
 
-/* ============================================================
-   20. SEARCH INPUT
-============================================================ */
 .search-wrap {
   position: relative;
   display: flex;
@@ -1060,9 +993,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   box-shadow: 0 0 0 3px var(--primary-ring);
 }
 
-/* ============================================================
-   21. STATUS DOT
-============================================================ */
 .status-dot {
   width: 8px;
   height: 8px;
@@ -1073,9 +1003,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .status-dot.offline { background: var(--slate-400); }
 .status-dot.busy    { background: var(--danger); }
 
-/* ============================================================
-   22. SECTION HEADER
-============================================================ */
 .section-head {
   display: flex;
   align-items: center;
@@ -1091,9 +1018,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 
 .section-head-right { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
-/* ============================================================
-   23. PAGINATION
-============================================================ */
 .pagination {
   display: flex;
   align-items: center;
@@ -1121,34 +1045,79 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   font-weight: 700;
 }
 
-/* ============================================================
-   24. OFFLINE BANNER
-============================================================ */
 #offline-banner {
   position: fixed;
-  bottom: var(--sp-5);
-  right: var(--sp-5);
-  background: var(--slate-800);
-  color: #fff;
-  padding: var(--sp-3) var(--sp-5);
-  border-radius: var(--r-lg);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  inset: 0;
+  background: rgba(0,0,0,.52);
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  box-shadow: var(--sh-xl);
-  z-index: var(--z-400);
-  transform: translateY(80px);
-  transition: transform var(--tr-slow);
+  justify-content: center;
+  z-index: 9000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s;
 }
-[dir="rtl"] #offline-banner { right: auto; left: var(--sp-5); }
+#offline-banner.show {
+  opacity: 1;
+  pointer-events: all;
+}
+.offline-popup-inner {
+  background: var(--surface, #fff);
+  border-radius: 20px;
+  padding: 36px 44px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.28);
+  min-width: 280px;
+  max-width: 340px;
+  animation: offlinePopIn .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes offlinePopIn {
+  from { transform: scale(.8); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+.offline-popup-icon { font-size: 2.4rem; line-height: 1; }
+.offline-popup-msg {
+  font-size: var(--text-sm, .875rem);
+  font-weight: 700;
+  color: var(--text, #1e293b);
+  line-height: 1.6;
+}
+.offline-popup-msg span {
+  font-weight: 400;
+  color: var(--text-muted, #64748b);
+}
+.offline-popup-ring {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.offline-popup-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 5px solid var(--border, #e2e8f0);
+  border-top-color: var(--primary, #2563eb);
+  animation: offlineSpin 1s linear infinite;
+}
+@keyframes offlineSpin {
+  to { transform: rotate(360deg); }
+}
+.offline-popup-count {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--primary, #2563eb);
+  line-height: 1;
+  transition: transform .2s;
+}
 
-#offline-banner.show { transform: translateY(0); }
-
-/* ============================================================
-   25. ANIMATIONS
-============================================================ */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1178,7 +1147,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
 .animate-slide-r { animation: slideInRight var(--tr-slow) ease forwards; }
 .animate-slide-l { animation: slideInLeft var(--tr-slow) ease forwards; }
 
-/* Skeleton loading */
 .skeleton {
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
   background-size: 200% 100%;
@@ -1186,17 +1154,11 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   border-radius: var(--r);
 }
 
-/* ============================================================
-   26. SCROLLBAR
-============================================================ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--r-full); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
 
-/* ============================================================
-   27. UTILITY HELPERS
-============================================================ */
 .mt-1 { margin-top: var(--sp-1); } .mt-2 { margin-top: var(--sp-2); }
 .mt-4 { margin-top: var(--sp-4); } .mt-6 { margin-top: var(--sp-6); }
 .mb-1 { margin-bottom: var(--sp-1); } .mb-2 { margin-bottom: var(--sp-2); }
@@ -1235,9 +1197,6 @@ h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.2; }
   color: var(--text-muted);
 }
 
-/* ============================================================
-   28. RESPONSIVE UTILITIES
-============================================================ */
 @media (max-width: 1024px) {
   .hide-lg { display: none !important; }
 }

@@ -2,24 +2,17 @@
    أعمالي ERP — Dashboard Styles
 ============================================================ */
 
-/* ============================================================
-   GLOBAL OVERFLOW PREVENTION
-============================================================ */
 html, body {
   overflow-x: hidden;
   max-width: 100%;
 }
 
-/* Utility: hide on small/medium screens */
 .hide-sm { display: none !important; }
 @media (min-width: 641px)  { .hide-sm  { display: flex !important; } }
 
 .hide-md { display: none !important; }
 @media (min-width: 769px)  { .hide-md  { display: flex !important; } }
 
-/* ============================================================
-   APP SHELL
-============================================================ */
 .app-shell {
   display: flex;
   min-height: 100vh;
@@ -27,9 +20,6 @@ html, body {
   overflow-x: hidden;
 }
 
-/* ============================================================
-   SIDEBAR
-============================================================ */
 .sidebar {
   width: var(--sidebar-w);
   height: 100vh;
@@ -41,9 +31,9 @@ html, body {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: var(--z-200);
+  z-index: var(--z-300);
   transition: width var(--tr-slow), transform var(--tr-slow);
-  overflow: hidden;
+  overflow-x: clip;
   overflow-y: auto;
 }
 
@@ -51,7 +41,6 @@ html, body {
 
 .sidebar.collapsed { width: var(--sidebar-collapsed); }
 
-/* Sidebar Logo */
 .sidebar-logo {
   display: flex;
   align-items: center;
@@ -99,7 +88,6 @@ html, body {
   white-space: nowrap;
 }
 
-/* Sidebar Nav */
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -133,7 +121,6 @@ html, body {
 .sidebar-section-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-section-chevron { font-size: 1rem; line-height: 1; flex-shrink: 0; transition: transform var(--tr); }
 
-/* Accordion */
 .sidebar-group-body {
   overflow: hidden;
   max-height: 600px;
@@ -142,7 +129,6 @@ html, body {
 .sidebar-group:not(.open) > .sidebar-group-body { max-height: 0; opacity: 0; }
 .sidebar-group:not(.open) > .sidebar-section .sidebar-section-chevron { transform: rotate(-90deg); }
 
-/* Collapsed */
 .sidebar.collapsed .sidebar-section { opacity: 0; height: 0; padding: 0; margin: 0; pointer-events: none; }
 .sidebar.collapsed .sidebar-group-body { max-height: none !important; opacity: 1 !important; }
 
@@ -201,7 +187,6 @@ html, body {
 }
 .sidebar.collapsed .sidebar-item-badge { opacity: 0; }
 
-/* Tooltip when collapsed */
 .sidebar.collapsed .sidebar-item::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -221,7 +206,6 @@ html, body {
 [data-lang="en"] .sidebar.collapsed .sidebar-item::after { right: auto; left: calc(100% + 8px); }
 .sidebar.collapsed .sidebar-item:hover::after { opacity: 1; }
 
-/* Sidebar Bottom */
 .sidebar-bottom {
   border-top: 1px solid var(--border);
   padding: var(--sp-3);
@@ -258,9 +242,6 @@ html, body {
 }
 .sidebar-user-role { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 
-/* ============================================================
-   SIDEBAR OVERLAY (mobile drawer backdrop)
-============================================================ */
 .sidebar-overlay {
   display: none;
   position: fixed;
@@ -271,9 +252,6 @@ html, body {
 }
 .sidebar-overlay.show { display: block; }
 
-/* ============================================================
-   MAIN WRAPPER
-============================================================ */
 .main-wrapper {
   flex: 1;
   margin-right: var(--sidebar-w);
@@ -298,9 +276,6 @@ html, body {
 [data-lang="en"] .sidebar.collapsed ~ .main-wrapper,
 [data-lang="en"] .main-wrapper.expanded { margin-right: 0; margin-left: var(--sidebar-collapsed); }
 
-/* ============================================================
-   APP HEADER
-============================================================ */
 .app-header {
   height: var(--header-h);
   background: var(--surface);
@@ -311,9 +286,9 @@ html, body {
   padding: 0 var(--sp-5);
   position: sticky;
   top: 0;
-  z-index: var(--z-100);
+  z-index: var(--z-300);
   box-shadow: var(--sh-xs);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .header-toggle {
@@ -395,9 +370,6 @@ html, body {
 }
 .header-lang:hover { background: var(--surface-2); color: var(--text); }
 
-/* ============================================================
-   CONTENT AREA
-============================================================ */
 .content-area {
   flex: 1;
   padding: clamp(var(--sp-4), 2.4vw, var(--sp-10));
@@ -430,9 +402,6 @@ html, body {
   to   { opacity: 1; transform: none; }
 }
 
-/* ============================================================
-   DASHBOARD MODULE
-============================================================ */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
@@ -446,7 +415,6 @@ html, body {
   gap: var(--sp-5);
 }
 
-/* Chart area */
 .chart-box {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -475,7 +443,6 @@ html, body {
 }
 .chart-svg-wrap svg { width: 100%; height: 100%; }
 
-/* Bar chart */
 .bar-chart {
   display: flex;
   align-items: flex-end;
@@ -518,7 +485,6 @@ html, body {
   max-width: 100%;
 }
 
-/* Activity feed */
 .activity-feed { display: flex; flex-direction: column; gap: 0; }
 
 .activity-item {
@@ -544,9 +510,6 @@ html, body {
 .activity-title { font-size: var(--text-sm); font-weight: 500; }
 .activity-time  { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
 
-/* ============================================================
-   MODULE COMMON STYLES
-============================================================ */
 .module-header {
   display: flex;
   align-items: center;
@@ -616,9 +579,6 @@ html, body {
 .filter-btn:hover  { border-color: var(--primary); color: var(--primary); }
 .filter-btn.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
 
-/* ============================================================
-   TABLE STYLES
-============================================================ */
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -642,9 +602,6 @@ html, body {
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr:hover { background: var(--surface-2); }
 
-/* ============================================================
-   INVOICE / DOCUMENT STYLES
-============================================================ */
 .doc-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -659,9 +616,6 @@ html, body {
 .doc-title  { font-size: var(--text-base); font-weight: 700; margin: var(--sp-1) 0; }
 .doc-amount { font-size: var(--text-xl); font-weight: 800; color: var(--primary); }
 
-/* ============================================================
-   PRODUCT CARD (INVENTORY)
-============================================================ */
 .product-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -691,9 +645,6 @@ html, body {
 .stock-bar { margin-top: var(--sp-2); }
 .stock-label { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 4px; }
 
-/* ============================================================
-   CUSTOMER / EMPLOYEE CARD
-============================================================ */
 .person-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -712,9 +663,6 @@ html, body {
 .person-meta  { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
 .person-actions { display: flex; gap: var(--sp-2); flex-shrink: 0; }
 
-/* ============================================================
-   MODALS
-============================================================ */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -785,9 +733,6 @@ html, body {
   flex-wrap: wrap;
 }
 
-/* ============================================================
-   NOTIFICATIONS PANEL
-============================================================ */
 .notif-panel {
   position: absolute;
   top: calc(var(--header-h) + 4px);
@@ -832,9 +777,6 @@ html, body {
 .notif-text { font-size: var(--text-sm); }
 .notif-time { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
 
-/* ============================================================
-   QUICK ACTIONS
-============================================================ */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
@@ -860,16 +802,10 @@ html, body {
 .quick-action-icon  { font-size: 1.75rem; }
 .quick-action-label { font-size: var(--text-xs); font-weight: 600; }
 
-/* ============================================================
-   REPORT / CHART LEGEND
-============================================================ */
 .chart-legend { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-top: var(--sp-4); }
 .legend-item  { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
 .legend-dot   { width: 10px; height: 10px; border-radius: var(--r-full); flex-shrink: 0; }
 
-/* ============================================================
-   SYNC STATUS
-============================================================ */
 .sync-indicator {
   display: flex;
   align-items: center;
@@ -891,17 +827,10 @@ html, body {
 .sync-indicator.syncing .sync-dot { background: var(--warning); animation: pulse 1s infinite; }
 .sync-indicator.offline  .sync-dot { background: var(--danger); }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 1280px
-============================================================ */
 @media (max-width: 1280px) {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 1024px (tablet landscape)
-   Sidebar slides off-canvas; main wrapper expands to 100%
-============================================================ */
 @media (max-width: 1024px) {
   html, body { overflow-x: hidden; }
 
@@ -930,9 +859,6 @@ html, body {
   .app-header { padding: 0 var(--sp-4); }
 }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 768px (tablet portrait)
-============================================================ */
 @media (max-width: 768px) {
   .content-area { padding: var(--sp-4); }
 
@@ -942,12 +868,12 @@ html, body {
 
   .quick-actions { grid-template-columns: repeat(3, 1fr); }
 
-  /* Tables: horizontal scroll */
+  
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .table { min-width: 600px; }
   .table th, .table td { padding: var(--sp-2) var(--sp-3); }
 
-  /* Settings layout */
+  
   .settings-layout { grid-template-columns: 1fr !important; }
   .settings-sidebar {
     display: flex !important;
@@ -958,7 +884,7 @@ html, body {
 
   .dashboard-grid { grid-template-columns: 1fr; }
 
-  /* Notif & currency panels: full-width */
+  
   .notif-panel {
     width: calc(100vw - 32px);
     left: 16px;
@@ -969,15 +895,12 @@ html, body {
   [dir="rtl"] .notif-panel { left: 16px; right: 16px; }
 
   .app-header { padding: 0 var(--sp-3); gap: var(--sp-2); }
-  .header-lang { display: none; }
+  .header-lang { display: flex; padding: 4px 10px; font-size: var(--text-xs); }
 
-  /* Modal: wider */
+  
   .modal, .modal-lg, .modal-xl { max-width: 94vw; }
 }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 480px (standard phones)
-============================================================ */
 @media (max-width: 480px) {
   html, body { overflow-x: hidden; }
 
@@ -1002,15 +925,15 @@ html, body {
   #emp-cards-grid { grid-template-columns: 1fr !important; }
   .quick-actions { grid-template-columns: repeat(2, 1fr); }
 
-  /* Form grids: single column */
+  
   .form-grid  { grid-template-columns: 1fr !important; }
   .form-row, .form-row-3 { grid-template-columns: 1fr !important; }
 
-  /* Tabs: horizontal scroll */
+  
   .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: var(--sp-1); -webkit-overflow-scrolling: touch; }
   .tab-btn { flex-shrink: 0; }
 
-  /* Modals: full-width */
+  
   .modal,
   .modal-lg,
   .modal-xl {
@@ -1025,17 +948,17 @@ html, body {
   .modal-footer { padding: var(--sp-4); flex-wrap: wrap; }
   .modal-footer .btn { flex: 1; min-width: 110px; }
 
-  /* Tables */
+  
   .table { min-width: 520px; }
 
-  /* Header search: hide */
+  
   .header-search { display: none; }
   #header-sync   { display: none; }
 
-  /* Dashboard grid */
+  
   .dashboard-grid { grid-template-columns: 1fr; gap: var(--sp-4); }
 
-  /* Notif panel: full width */
+  
   .notif-panel {
     width: calc(100vw - 24px);
     left: 12px;
@@ -1044,14 +967,11 @@ html, body {
   }
   [dir="rtl"] .notif-panel { left: 12px; right: 12px; }
 
-  /* Chart: shorter on phone */
+  
   .chart-svg-wrap { height: 160px; }
   .bar-chart { height: 140px; }
 }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 360px (very small phones)
-============================================================ */
 @media (max-width: 360px) {
   .content-area { padding: var(--sp-2); }
 
@@ -1072,20 +992,17 @@ html, body {
   .modal-body   { padding: var(--sp-3); }
   .modal-footer { padding: var(--sp-3); }
 
-  /* Sidebar: full width on tiny screens */
+  
   .sidebar { width: 100vw !important; }
 
-  /* Table */
+  
   .table { min-width: 460px; }
 
-  /* Chart box: no padding */
+  
   .chart-box { padding: var(--sp-3); }
   .chart-svg-wrap { height: 140px; }
 }
 
-/* ============================================================
-   RESPONSIVE DASHBOARD — 320px (absolute minimum)
-============================================================ */
 @media (max-width: 320px) {
   .content-area { padding: var(--sp-2); }
   .quick-actions { grid-template-columns: 1fr 1fr; }
@@ -1102,9 +1019,6 @@ html, body {
   .module-toolbar select { width: 100%; }
 }
 
-/* ============================================================
-   PREVENT HORIZONTAL SCROLL — catch-all
-============================================================ */
 @media (max-width: 1024px) {
   html, body { overflow-x: hidden; }
   .main-wrapper { overflow-x: hidden; }
