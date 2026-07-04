@@ -7374,13 +7374,61 @@ ${bodyHTML}
 
       if (!ov) { resolve('dashboard'); return; }
 
-      if (scChoice) scChoice.style.display = 'block';
-      if (scPin)    scPin.style.display    = 'none';
-      if (pinInp)   pinInp.value           = '';
-      if (pinErr)   pinErr.style.display   = 'none';
+      const scExpired = document.getElementById('entry-screen-expired');
+
+      if (scChoice)  scChoice.style.display  = 'none';
+      if (scPin)     scPin.style.display     = 'none';
+      if (scExpired) scExpired.style.display = 'none';
+      if (pinInp)    pinInp.value            = '';
+      if (pinErr)    pinErr.style.display    = 'none';
       ov.style.opacity   = '';
       ov.style.transition = '';
       ov.style.display   = 'flex';
+
+      // ── فحص انتهاء الاشتراك قبل عرض شاشة الاختيار ──
+      (async function _checkSubscription() {
+        const acctKey = (typeof _acctKey === 'function') ? _acctKey() : null;
+        let expiry = null;
+        if (acctKey) {
+          try {
+            if (typeof window._fsGet === 'function') {
+              const snap = await window._fsGet('users/' + acctKey);
+              if (snap && snap.exists && snap.exists()) {
+                const d = snap.data();
+                if (d && d.subscriptionExpiry) {
+                  expiry = String(d.subscriptionExpiry);
+                  localStorage.setItem('a3mali_sub_' + acctKey, expiry);
+                }
+              }
+            }
+          } catch (e) {
+            // أوفلاين أو تعذّر الوصول — استخدم آخر تاريخ محفوظ محلياً
+            expiry = localStorage.getItem('a3mali_sub_' + acctKey);
+          }
+        }
+
+        const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+        if (expiry && today > expiry) {
+          // انتهى الاشتراك — اعرض شاشة التجديد وامنع الدخول للاثنين
+          if (scExpired) {
+            const dateEl = document.getElementById('entry-expired-date');
+            if (dateEl) dateEl.textContent = 'تاريخ الانتهاء: ' + expiry;
+            const waEl = document.getElementById('entry-expired-wa');
+            if (waEl) {
+              let em = '';
+              try { em = (JSON.parse(sessionStorage.getItem('a3mali_user') || '{}').email) || ''; } catch (_e) {}
+              const msg = 'مرحباً، أرغب بتجديد اشتراكي في أعمالي.' + (em ? ('\nحسابي: ' + em) : '');
+              waEl.href = 'https://wa.me/905523223191?text=' + encodeURIComponent(msg);
+            }
+            scExpired.style.display = 'block';
+          } else if (scChoice) {
+            scChoice.style.display = 'block';
+          }
+        } else {
+          // الاشتراك ساري — اعرض شاشة الاختيار
+          if (scChoice) scChoice.style.display = 'block';
+        }
+      })();
 
       function finish(choice) {
         ov.style.transition = 'opacity .22s';
