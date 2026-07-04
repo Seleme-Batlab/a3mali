@@ -736,5 +736,57 @@
   });
 </script>
 
+<!-- ===== App Download Popup ===== -->
+<div id="a3-app-popup" class="a3-app-overlay" role="dialog" aria-modal="true" aria-labelledby="a3-app-title">
+  <div class="a3-app-card">
+    <button class="a3-app-close" onclick="a3CloseAppPopup()" aria-label="إغلاق">✕</button>
+    <div class="a3-app-badge"><img src="assets/a3malilogo.png" alt="أعمالي" /></div>
+    <h3 id="a3-app-title">نزّل تطبيق أعمالي 📲</h3>
+    <p class="a3-app-text">لتجربة أفضل وسرعة أعلى — والعمل حتى بدون إنترنت. حمّل التطبيق على جهازك.</p>
+    <a class="a3-app-btn" href="assets/a3maliapp.apk" download="a3maliapp.apk" onclick="a3CloseAppPopup()">⬇️ تحميل للأندرويد (APK)</a>
+    <div class="a3-app-soon">🍏 نسخة الآيفون قريباً</div>
+    <button class="a3-app-later" onclick="a3CloseAppPopup()">لاحقاً</button>
+  </div>
+</div>
+<style>
+  .a3-app-overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);
+    display:none;align-items:center;justify-content:center;z-index:99999;padding:20px;
+    font-family:'Cairo','Tajawal',sans-serif;opacity:0;transition:opacity .25s ease;}
+  .a3-app-overlay.a3-show{display:flex;opacity:1;}
+  .a3-app-card{position:relative;width:100%;max-width:380px;background:#fff;border-radius:24px;
+    padding:34px 28px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);
+    transform:translateY(16px) scale(.97);transition:transform .28s ease;}
+  .a3-app-overlay.a3-show .a3-app-card{transform:translateY(0) scale(1);}
+  .a3-app-close{position:absolute;top:14px;left:16px;background:transparent;border:none;
+    font-size:20px;color:#94a3b8;cursor:pointer;line-height:1;}
+  .a3-app-close:hover{color:#334155;}
+  .a3-app-badge{width:84px;height:84px;margin:0 auto 16px;border-radius:20px;background:#eff6ff;
+    display:flex;align-items:center;justify-content:center;}
+  .a3-app-badge img{width:60px;height:60px;object-fit:contain;}
+  .a3-app-card h3{font-size:24px;font-weight:800;color:#1e293b;margin:0 0 10px;}
+  .a3-app-text{font-size:15px;color:#64748b;line-height:1.7;margin:0 0 22px;}
+  .a3-app-btn{display:block;background:#2563eb;color:#fff;font-size:17px;font-weight:800;
+    text-decoration:none;padding:16px;border-radius:14px;transition:background .2s ease;}
+  .a3-app-btn:hover{background:#1d4ed8;}
+  .a3-app-soon{margin-top:14px;font-size:14px;font-weight:600;color:#94a3b8;}
+  .a3-app-later{margin-top:16px;background:transparent;border:none;color:#94a3b8;
+    font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .a3-app-later:hover{color:#64748b;text-decoration:underline;}
+</style>
+<script>
+  function a3CloseAppPopup(){
+    var el=document.getElementById('a3-app-popup');
+    if(el) el.classList.remove('a3-show');
+    try{ sessionStorage.setItem('a3_app_popup_seen','1'); }catch(e){}
+  }
+  (function(){
+    try{ if(sessionStorage.getItem('a3_app_popup_seen')) return; }catch(e){}
+    setTimeout(function(){
+      var el=document.getElementById('a3-app-popup');
+      if(el) el.classList.add('a3-show');
+    },1500);
+  })();
+</script>
+
 </body>
 </html>

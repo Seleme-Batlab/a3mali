@@ -13,7 +13,7 @@
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   <meta name="language" content="Arabic" />
   <meta name="theme-color" content="#2563eb" />
-  <link rel="canonical" href="https://a3mali.com/" />
+  <link rel="canonical" href="https://a3mali.site/" />
 
   <!-- ===================== OPEN GRAPH (Facebook / LinkedIn / WhatsApp) ===================== -->
   <meta property="og:type" content="website" />
@@ -21,8 +21,8 @@
   <meta property="og:locale" content="ar_AR" />
   <meta property="og:title" content="أعمالي | نظام ERP ومحاسبة سحابي لإدارة أعمالك بالكامل" />
   <meta property="og:description" content="نظام ERP سحابي عربي متكامل: مبيعات، مخزون، محاسبة، فواتير، نقاط بيع وموظفين في منصة واحدة. يعمل بدون إنترنت. جرّب مجاناً الآن." />
-  <meta property="og:url" content="https://a3mali.com/" />
-  <meta property="og:image" content="https://a3mali.com/assets/a3malilogo.png" />
+  <meta property="og:url" content="https://a3mali.site/" />
+  <meta property="og:image" content="https://a3mali.site/assets/a3malilogo.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="أعمالي — نظام إدارة الأعمال السحابي" />
@@ -31,7 +31,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="أعمالي | نظام ERP ومحاسبة سحابي لإدارة أعمالك" />
   <meta name="twitter:description" content="منصة ERP سحابية عربية متكاملة: مبيعات، مخزون، محاسبة، فواتير ونقاط بيع. تعمل بدون إنترنت. ابدأ مجاناً." />
-  <meta name="twitter:image" content="https://a3mali.com/assets/a3malilogo.png" />
+  <meta name="twitter:image" content="https://a3mali.site/assets/a3malilogo.png" />
   <meta name="twitter:image:alt" content="أعمالي — نظام إدارة الأعمال السحابي" />
 
   <!-- ===================== FAVICON & APPLE TOUCH ICONS ===================== -->
@@ -52,7 +52,7 @@
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web, iOS, Android",
     "description": "نظام ERP سحابي عربي متكامل لإدارة المبيعات والمخزون والمحاسبة والفواتير ونقاط البيع والموظفين، يعمل بدون إنترنت.",
-    "url": "https://a3mali.com/",
+    "url": "https://a3mali.site/",
     "inLanguage": "ar",
     "offers": {
       "@type": "Offer",
@@ -68,8 +68,8 @@
     "publisher": {
       "@type": "Organization",
       "name": "أعمالي",
-      "url": "https://a3mali.com/",
-      "logo": "https://a3mali.com/assets/a3malilogo.png"
+      "url": "https://a3mali.site/",
+      "logo": "https://a3mali.site/assets/a3malilogo.png"
     }
   }
   </script>
@@ -728,7 +728,7 @@
           <div class="mockup-dot dot-red"></div>
           <div class="mockup-dot dot-yellow"></div>
           <div class="mockup-dot dot-green"></div>
-          <div class="mockup-url">app.a3mali.com/dashboard</div>
+          <div class="mockup-url">app.a3mali.site/dashboard</div>
         </div>
         <div class="mockup-body">
           <div class="mockup-kpis">
@@ -1129,22 +1129,23 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">الاسم</label>
-                  <input type="text" class="form-input" placeholder="اسمك الكريم" />
+                  <input type="text" id="cf-name" class="form-input" placeholder="اسمك الكريم" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">الشركة</label>
-                  <input type="text" class="form-input" placeholder="اسم شركتك" />
+                  <input type="text" id="cf-company" class="form-input" placeholder="اسم شركتك" />
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">البريد الإلكتروني</label>
-                <input type="email" class="form-input" placeholder="email@company.com" />
+                <input type="email" id="cf-email" class="form-input" placeholder="email@company.com" />
               </div>
               <div class="form-group">
                 <label class="form-label">الرسالة</label>
-                <textarea class="form-input form-textarea" placeholder="كيف يمكننا مساعدتك؟"></textarea>
+                <textarea id="cf-message" class="form-input form-textarea" placeholder="كيف يمكننا مساعدتك؟"></textarea>
               </div>
-              <button class="btn btn-primary w-full btn-lg">إرسال الرسالة</button>
+              <button type="button" class="btn btn-primary w-full btn-lg" onclick="sendContactMessage()">إرسال الرسالة</button>
+              <div id="cf-error" style="display:none;color:var(--danger,#ef4444);font-size:var(--text-sm);text-align:center;"></div>
             </div>
           </div>
         </div>
@@ -1224,6 +1225,35 @@
     document.querySelectorAll('.theme-toggle-btn').forEach(btn => btn.textContent = '☀️');
   }
 
+  // إرسال رسالة التواصل عبر واتساب
+  function sendContactMessage() {
+    const name    = (document.getElementById('cf-name').value || '').trim();
+    const company = (document.getElementById('cf-company').value || '').trim();
+    const email   = (document.getElementById('cf-email').value || '').trim();
+    const message = (document.getElementById('cf-message').value || '').trim();
+    const err     = document.getElementById('cf-error');
+
+    // التحقق من الحقول الأساسية
+    if (!name || !message) {
+      err.textContent = 'رجاءً أدخل الاسم والرسالة على الأقل.';
+      err.style.display = 'block';
+      return;
+    }
+    err.style.display = 'none';
+
+    // بناء نص الرسالة
+    let text = 'رسالة جديدة من موقع أعمالي\n\n';
+    text += 'الاسم: ' + name + '\n';
+    if (company) text += 'الشركة: ' + company + '\n';
+    if (email)   text += 'البريد الإلكتروني: ' + email + '\n';
+    text += 'الرسالة: ' + message;
+
+    // رقم الواتساب (بدون + أو مسافات)
+    const phone = '905523223191';
+    const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
+    window.open(url, '_blank');
+  }
+
   // FAQ toggle
   function toggleFaq(el) {
     const item = el.parentElement;
@@ -1259,6 +1289,58 @@
     el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
     observer.observe(el);
   });
+</script>
+
+<!-- ===== App Download Popup ===== -->
+<div id="a3-app-popup" class="a3-app-overlay" role="dialog" aria-modal="true" aria-labelledby="a3-app-title">
+  <div class="a3-app-card">
+    <button class="a3-app-close" onclick="a3CloseAppPopup()" aria-label="إغلاق">✕</button>
+    <div class="a3-app-badge"><img src="assets/a3malilogo.png" alt="أعمالي" /></div>
+    <h3 id="a3-app-title">نزّل تطبيق أعمالي 📲</h3>
+    <p class="a3-app-text">لتجربة أفضل وسرعة أعلى — والعمل حتى بدون إنترنت. حمّل التطبيق على جهازك.</p>
+    <a class="a3-app-btn" href="assets/a3maliapp.apk" download="a3maliapp.apk" onclick="a3CloseAppPopup()">⬇️ تحميل للأندرويد (APK)</a>
+    <div class="a3-app-soon">🍏 نسخة الآيفون قريباً</div>
+    <button class="a3-app-later" onclick="a3CloseAppPopup()">لاحقاً</button>
+  </div>
+</div>
+<style>
+  .a3-app-overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);
+    display:none;align-items:center;justify-content:center;z-index:99999;padding:20px;
+    font-family:'Cairo','Tajawal',sans-serif;opacity:0;transition:opacity .25s ease;}
+  .a3-app-overlay.a3-show{display:flex;opacity:1;}
+  .a3-app-card{position:relative;width:100%;max-width:380px;background:#fff;border-radius:24px;
+    padding:34px 28px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);
+    transform:translateY(16px) scale(.97);transition:transform .28s ease;}
+  .a3-app-overlay.a3-show .a3-app-card{transform:translateY(0) scale(1);}
+  .a3-app-close{position:absolute;top:14px;left:16px;background:transparent;border:none;
+    font-size:20px;color:#94a3b8;cursor:pointer;line-height:1;}
+  .a3-app-close:hover{color:#334155;}
+  .a3-app-badge{width:84px;height:84px;margin:0 auto 16px;border-radius:20px;background:#eff6ff;
+    display:flex;align-items:center;justify-content:center;}
+  .a3-app-badge img{width:60px;height:60px;object-fit:contain;}
+  .a3-app-card h3{font-size:24px;font-weight:800;color:#1e293b;margin:0 0 10px;}
+  .a3-app-text{font-size:15px;color:#64748b;line-height:1.7;margin:0 0 22px;}
+  .a3-app-btn{display:block;background:#2563eb;color:#fff;font-size:17px;font-weight:800;
+    text-decoration:none;padding:16px;border-radius:14px;transition:background .2s ease;}
+  .a3-app-btn:hover{background:#1d4ed8;}
+  .a3-app-soon{margin-top:14px;font-size:14px;font-weight:600;color:#94a3b8;}
+  .a3-app-later{margin-top:16px;background:transparent;border:none;color:#94a3b8;
+    font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .a3-app-later:hover{color:#64748b;text-decoration:underline;}
+</style>
+<script>
+  function a3CloseAppPopup(){
+    var el=document.getElementById('a3-app-popup');
+    if(el) el.classList.remove('a3-show');
+    try{ sessionStorage.setItem('a3_app_popup_seen','1'); }catch(e){}
+  }
+  (function(){
+    try{ if(sessionStorage.getItem('a3_app_popup_seen')) return; }catch(e){}
+    setTimeout(function(){
+      var el=document.getElementById('a3-app-popup');
+      if(el) el.classList.add('a3-show');
+    },1500);
+  })();
 </script>
 
 </body>
