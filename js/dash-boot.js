@@ -8,6 +8,12 @@
 
   let _entryGranted   = false;
   let _navigatePatched = false;
+  // Tracks the uid we last fully booted for, so a redundant onAuthStateChanged
+  // fire for the SAME user (Firebase's cross-tab auth persistence can trigger
+  // this when another tab, e.g. cashier.html, opens its own Auth instance) does
+  // not re-run the whole boot sequence and re-show the entry-choice popup on
+  // top of an already-loaded dashboard.
+  let _lastAuthedUid  = null;
 
   function _patchNavigate() {
     if (_navigatePatched || typeof window.navigate !== 'function') return;
@@ -33,9 +39,14 @@
 
       onAuthStateChanged(auth, async (user) => {
         if (!user) {
+          _lastAuthedUid = null;
           window.location.href = 'login.html';
         } else {
-          const acctKey = user.uid || user.email || 'guest';
+          const uid = user.uid || user.email || 'guest';
+          if (_lastAuthedUid === uid) return; // redundant fire for the same user — ignore
+          _lastAuthedUid = uid;
+
+          const acctKey = uid;
           const hydratePromise = _hydrateFromFirestore(acctKey);
           window.initDashboard(hydratePromise);
           await hydratePromise;

@@ -1387,9 +1387,11 @@ ${bodyHTML}
       <!-- PANEL: PRODUCTS -->
       <div id="inv-panel-products">
         <div class="module-toolbar">
-          <div class="search-wrap" style="flex:1;max-width:340px;">
-            <input class="search-input" type="text" id="inv-search" placeholder="البحث باسم المنتج أو رقم الباركود..." oninput="filterInventory()" />
+          <div class="search-wrap" style="flex:1;max-width:340px;position:relative;">
+            <input class="search-input" type="text" id="inv-search" placeholder="البحث باسم المنتج أو رقم الباركود أو الفئة..." oninput="filterInventory()" autocomplete="off" style="padding-left:34px;" />
             <span class="search-icon">🔍</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="inv-cat-toggle" title="بحث بالفئة فقط" onclick="toggleInvCatSearchMode()" style="position:absolute;top:50%;left:6px;transform:translateY(-50%);padding:2px 8px;">🏷️</button>
+            <div id="inv-cat-suggest" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;overflow:hidden;max-height:280px;overflow-y:auto;"></div>
           </div>
           <select class="form-select" id="inv-cat-filter" style="max-width:200px;" onchange="filterInventory()">
             <option value="all">كل الفئات</option>
@@ -1446,7 +1448,7 @@ ${bodyHTML}
           <div class="card-header"><h3 style="font-weight:700;">الفئات</h3></div>
           <div class="card-body">
             <div style="display:flex;gap:var(--sp-2);margin-bottom:var(--sp-4);">
-              <input type="text" class="form-input" id="cat-name" placeholder="اسم الفئة الجديدة..." style="flex:1;" />
+              <input type="text" class="form-input" id="cat-name" placeholder="اسم الفئة الجديدة... (والبحث ضمن الفئات)" style="flex:1;" oninput="filterCategoryList()" />
               <button class="btn btn-primary" onclick="saveCategory()">+ إضافة</button>
             </div>
             <div id="cat-list">${generateCategoryList()}</div>
@@ -1474,7 +1476,12 @@ ${bodyHTML}
                 <span>الفئة</span>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="goToAddCategory()" title="إضافة فئة جديدة" style="padding:2px 8px;font-size:var(--text-xs);font-weight:700;">+ فئة جديدة</button>
               </label>
-              <select class="form-select" id="prod-cat">${generateCategoryOptions('عام')}</select>
+              <div style="position:relative;">
+                <input type="text" class="form-input" id="prod-cat-search" placeholder="ابحث عن الفئة أو اضغط لعرض الكل..." autocomplete="off" value="عام"
+                  onclick="openProdCatPicker('prod')" oninput="filterProdCatPicker('prod')" onfocus="openProdCatPicker('prod')" onblur="syncProdCatSearchBox('prod')" />
+                <input type="hidden" id="prod-cat" value="عام" />
+                <div id="prod-cat-suggest" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;overflow:hidden;max-height:220px;overflow-y:auto;"></div>
+              </div>
             </div>
             <div class="form-group"><label class="form-label">وحدة القياس</label>
               <select class="form-select" id="prod-unit">
@@ -1485,8 +1492,8 @@ ${bodyHTML}
           </div>
           <div class="form-group"><label class="form-label">عملة المنتج (تُطبّق على سعر البيع والتكلفة)</label>
             <select class="form-select" id="prod-currency">
-              <option value="SYP" selected>ليرة سورية (ل.س)</option>
-              <option value="USD">دولار أمريكي ($)</option>
+              <option value="SYP">ليرة سورية (ل.س)</option>
+              <option value="USD" selected>دولار أمريكي ($)</option>
               <option value="TRY">ليرة تركية (₺)</option>
             </select>
             <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">إذا اخترت الدولار، يُحوَّل السعر تلقائياً للعملة الأساسية في الكاشير والتقارير حسب سعر الصرف.</div>
@@ -1497,7 +1504,6 @@ ${bodyHTML}
           </div>
           <div class="form-row">
             <div class="form-group"><label class="form-label">الكمية الأولية</label><input type="number" class="form-input" id="prod-stock" value="0" /></div>
-            <div class="form-group"><label class="form-label">حد المخزون الأدنى</label><input type="number" class="form-input" id="prod-min-stock" value="5" /></div>
           </div>
           <div class="form-row">
             <div class="form-group"><label class="form-label">المورد (من جلب البضاعة)</label>
@@ -1543,7 +1549,15 @@ ${bodyHTML}
             <div class="form-group"><label class="form-label">رقم الباركود</label><input type="number" class="form-input" id="edit-prod-sku" /></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">الفئة</label><select class="form-select" id="edit-prod-cat"></select></div>
+            <div class="form-group">
+              <label class="form-label">الفئة</label>
+              <div style="position:relative;">
+                <input type="text" class="form-input" id="edit-prod-cat-search" placeholder="ابحث عن الفئة أو اضغط لعرض الكل..." autocomplete="off"
+                  onclick="openProdCatPicker('edit-prod')" oninput="filterProdCatPicker('edit-prod')" onfocus="openProdCatPicker('edit-prod')" onblur="syncProdCatSearchBox('edit-prod')" />
+                <input type="hidden" id="edit-prod-cat" />
+                <div id="edit-prod-cat-suggest" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;overflow:hidden;max-height:220px;overflow-y:auto;"></div>
+              </div>
+            </div>
             <div class="form-group"><label class="form-label">عملة المنتج</label>
               <select class="form-select" id="edit-prod-currency">
                 <option value="SYP">ليرة سورية (ل.س)</option>
@@ -1576,6 +1590,7 @@ ${bodyHTML}
               </div>
             </div>
           </div>
+          <div class="form-group"><label class="form-label">وصف المنتج</label><textarea class="form-input form-textarea" id="edit-prod-desc" placeholder="وصف المنتج..."></textarea></div>
           <div style="font-size:var(--text-xs);color:var(--text-muted);">لتعديل الكمية استخدم زر «+ كمية» أو تبويب «تسوية المخزون» حتى تُسجَّل الحركة.</div>
         </div>
         <div class="modal-footer">
@@ -1641,6 +1656,8 @@ ${bodyHTML}
   function generateProductCard(p, i, total) {
     const supLine = p.supplierName
       ? `<div class="product-sku" style="margin-top:var(--sp-1);color:var(--text-muted);">🏭 ${p.supplierName}</div>` : '';
+    const descLine = p.desc
+      ? `<div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--sp-2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;"><span style="font-weight:700;">الوصف:</span> ${p.desc}</div>` : '';
     const pcur = p.currency || 'SYP';
     const base = window.Currency ? window.Currency.base : 'SYP';
     const stock = Number(p.stock) || 0;
@@ -1676,6 +1693,7 @@ ${bodyHTML}
         <div class="product-card-body">
           <div class="product-name">${p.name}</div>
           <div class="product-sku" style="margin-bottom:var(--sp-2);">${p.sku ? '🔢 '+p.sku : ''}${cat ? (p.sku ? ' · ' : '')+cat : ''}</div>
+          ${descLine}
           <div class="product-price">${_fmtDirect(sellPrice, pcur)}</div>
           ${profitLine}
           ${supLine}
@@ -1716,9 +1734,13 @@ ${bodyHTML}
     }).join('');
   }
 
-  function generateCategoryList() {
-    const list = window._categories || [];
+  function generateCategoryList(query) {
+    const q = (query || '').trim().toLowerCase();
+    const list = (window._categories || []).filter(c => !q || c.name.toLowerCase().includes(q));
     if (!list.length) {
+      if (q) {
+        return `<div class="empty-state" style="padding:var(--sp-8);"><div class="empty-icon">🔍</div><div class="empty-title">لا توجد نتائج</div><div class="empty-desc">لا توجد فئة تطابق بحثك</div></div>`;
+      }
       return `<div class="empty-state" style="padding:var(--sp-8);"><div class="empty-icon">🏷️</div><div class="empty-title">لا توجد فئات مخصصة</div><div class="empty-desc">الفئات الافتراضية متاحة دائماً. أضف فئة جديدة لتظهر هنا.</div></div>`;
     }
     return `<div class="table-wrap"><table class="table"><thead><tr><th>الفئة</th><th>عدد المنتجات</th><th>إجراء</th></tr></thead><tbody>` +
@@ -1728,12 +1750,76 @@ ${bodyHTML}
       }).join('') + `</tbody></table></div>`;
   }
 
+  window.filterCategoryList = function() {
+    const input = document.getElementById('cat-name');
+    const el = document.getElementById('cat-list');
+    if (el) el.innerHTML = generateCategoryList(input ? input.value : '');
+  };
+
   function generateCategoryOptions(selected) {
-    const defaults = ['عام','مأكولات','مشروبات','قرطاسية','إلكترونيات','ملابس'];
+    const defaults = ['عام'];
     const custom = (window._categories || []).map(c => c.name);
     const all = Array.from(new Set([...defaults, ...custom]));
     return all.map(n => `<option ${n === selected ? 'selected' : ''}>${n}</option>`).join('');
   }
+
+  window.openProdCatPicker = function(prefix) {
+    window.renderProdCatSuggestions(prefix, '');
+  };
+
+  window.filterProdCatPicker = function(prefix) {
+    const input = document.getElementById(prefix + '-cat-search');
+    window.renderProdCatSuggestions(prefix, input ? input.value : '');
+  };
+
+  window.renderProdCatSuggestions = function(prefix, q) {
+    const box = document.getElementById(prefix + '-cat-suggest');
+    if (!box) return;
+    const defaults = ['عام'];
+    const custom = (window._categories || []).map(c => c.name);
+    const all = Array.from(new Set([...defaults, ...custom]));
+    const ql = (q || '').trim().toLowerCase();
+    const matches = all.filter(n => !ql || n.toLowerCase().includes(ql));
+    if (!matches.length) {
+      box.innerHTML = `<div style="padding:10px 14px;color:var(--text-muted);font-size:var(--text-sm);">لا توجد نتائج</div>`;
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = matches.map(name => {
+      const count = (window._products || []).filter(p => (p.cat || p.category) === name).length;
+      return `
+        <div class="gs-item" data-cat="${name}"
+          style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;cursor:pointer;transition:background .1s;"
+          onmousedown="selectProdCat('${prefix}','${name.replace(/'/g, "\\'")}')"
+          onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+          <span style="display:flex;align-items:center;gap:8px;font-size:var(--text-sm);font-weight:600;">🏷️ ${name}</span>
+          <span style="font-size:var(--text-xs);color:var(--text-muted);">${count}</span>
+        </div>`;
+    }).join('');
+    box.style.display = 'block';
+  };
+
+  window.selectProdCat = function(prefix, name) {
+    const hidden = document.getElementById(prefix + '-cat');
+    const search = document.getElementById(prefix + '-cat-search');
+    if (hidden) hidden.value = name;
+    if (search) search.value = name;
+    window.hideProdCatSuggestions(prefix);
+  };
+
+  window.hideProdCatSuggestions = function(prefix) {
+    const box = document.getElementById(prefix + '-cat-suggest');
+    if (box) box.style.display = 'none';
+  };
+
+  window.syncProdCatSearchBox = function(prefix) {
+    setTimeout(() => {
+      const hidden = document.getElementById(prefix + '-cat');
+      const search = document.getElementById(prefix + '-cat-search');
+      if (hidden && search) search.value = hidden.value || 'عام';
+      window.hideProdCatSuggestions(prefix);
+    }, 150);
+  };
 
   function generateProductSelectOptions() {
     return (window._products || []).map(p => `<option value="${p.id}">${p.name}${p.sku ? ' ('+p.sku+')' : ''}</option>`).join('');
@@ -3465,6 +3551,7 @@ ${bodyHTML}
       { icon:'💰', name:'تقرير الأرباح والخسائر', desc:'ملخص الإيرادات والمصروفات والأرباح', color:'green',  key:'pl' },
       { icon:'📊', name:'تقرير المبيعات',          desc:'تفصيل المبيعات حسب الفترة والعميل والمنتج', color:'blue',  key:'sales' },
       { icon:'📦', name:'تقرير المخزون',           desc:'حركات المخزون والقيمة الإجمالية',         color:'amber', key:'inventory' },
+      { icon:'🏷️', name:'تصدير كمية المنتجات والفئات', desc:'إجمالي الكمية المتوفرة لكل فئة (بشكل عام، غير مرتبط بالتاريخ)', color:'violet', key:'catQty' },
       { icon:'👥', name:'تقرير العملاء',           desc:'أداء العملاء ونشاطهم الشرائي',             color:'violet',key:'crm' },
       { icon:'👨‍💼', name:'تقرير الموظفين',          desc:'الحضور والإجازات وكشف الرواتب',           color:'red',   key:'hr' },
       { icon:'🏭', name:'تقرير الموردين',          desc:'المشتريات والمدفوعات لكل مورد',             color:'blue',  key:'suppliers' },
@@ -3684,11 +3771,6 @@ ${bodyHTML}
                 <h4 style="font-weight:700;margin-bottom:var(--sp-2);">📤 تصدير يدوي</h4>
                 <p style="color:var(--text-muted);font-size:var(--text-sm);margin-bottom:var(--sp-4);">تحميل نسخة كاملة من بياناتك كملف JSON</p>
                 <button class="btn btn-secondary" onclick="exportDataJSON()">📥 تحميل نسخة JSON</button>
-              </div>
-              <div style="padding:var(--sp-5);background:#fef2f2;border-radius:var(--r-lg);border:1px solid #fecaca;">
-                <h4 style="font-weight:700;margin-bottom:var(--sp-2);color:#b91c1c;">⚠️ منطقة الخطر</h4>
-                <p style="color:var(--text-muted);font-size:var(--text-sm);margin-bottom:var(--sp-4);">حذف جميع بيانات النظام (الفواتير، العملاء، المنتجات، الموردين، المصاريف، الديون وغيرها) بشكل نهائي ولا يمكن التراجع عنه. يُفضّل تحميل نسخة JSON قبل المتابعة.</p>
-                <button class="btn btn-danger" onclick="confirmClearAllData()">🗑️ مسح جميع البيانات</button>
               </div>
             </div>
           </div>
@@ -4078,40 +4160,6 @@ ${bodyHTML}
     } catch(e) {
       showToast('error', 'خطأ في تصدير البيانات');
     }
-  };
-
-  window.confirmClearAllData = function() {
-    if (!confirm('⚠️ سيتم حذف جميع البيانات (الفواتير، العملاء، المنتجات، الموردين، المصاريف، الديون، الكاشير وغيرها) بشكل نهائي ولا يمكن التراجع عن هذا الإجراء.\n\nهل تريد الاستمرار؟')) return;
-    const typed = prompt('للتأكيد النهائي، اكتب كلمة "مسح" بدون اقتباس:');
-    if (typed !== 'مسح') {
-      showToast('info', 'تم إلغاء العملية');
-      return;
-    }
-    window.clearAllData();
-  };
-
-  window.clearAllData = function() {
-    window._invoices     = [];
-    window._customers    = [];
-    window._products     = [];
-    window._suppliers    = [];
-    window._expenses     = [];
-    window._cashbox       = [];
-    window._workOrders    = [];
-    window._employees     = [];
-    window._stockMoves    = [];
-    window._categories    = [];
-    window._debts          = [];
-    window._purchases      = [];
-    window._salesReps      = [];
-    window._salesTargets   = [];
-    window._printTemplates = {};
-    window._saveData();
-    if (typeof window._fsDeleteAllInvoices === 'function') {
-      window._fsDeleteAllInvoices(_acctKey()).catch(e => console.warn('[ClearAllData] invoices cleanup failed', e));
-    }
-    showToast('success', 'تم حذف جميع البيانات بنجاح ✓');
-    window.navigate('dashboard');
   };
 
   window.savePinSettings = function(clear) {
@@ -5092,7 +5140,8 @@ ${bodyHTML}
     });
     const stEl  = document.getElementById('prod-stock');     if (stEl)  stEl.value  = '0';
     const minEl = document.getElementById('prod-min-stock'); if (minEl) minEl.value = '5';
-    const catEl = document.getElementById('prod-cat');       if (catEl) { catEl.innerHTML = generateCategoryOptions('عام'); catEl.value = 'عام'; }
+    const catEl = document.getElementById('prod-cat');       if (catEl) catEl.value = 'عام';
+    const catSearchEl = document.getElementById('prod-cat-search'); if (catSearchEl) catSearchEl.value = 'عام';
     const supEl = document.getElementById('prod-supplier'); if (supEl) supEl.value = '';
     const curEl = document.getElementById('prod-currency'); if (curEl) curEl.value = 'SYP';
     const emEl  = document.getElementById('prod-emoji'); if (emEl) emEl.value = '📦';
@@ -5159,7 +5208,8 @@ ${bodyHTML}
   }
   function _refreshCategoriesPanel() {
     const el = document.getElementById('cat-list');
-    if (el) el.innerHTML = generateCategoryList();
+    const input = document.getElementById('cat-name');
+    if (el) el.innerHTML = generateCategoryList(input ? input.value : '');
   }
   window.switchInvTab = function(btn, tab) {
     ['products','movements','adjust','categories'].forEach(t => {
@@ -5185,18 +5235,97 @@ ${bodyHTML}
     if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   };
 
+  window._invCatMode = window._invCatMode || false;
+
   window.filterInventory = function() {
     const q   = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
     const cat = document.getElementById('inv-cat-filter')?.value || 'all';
     document.querySelectorAll('#inventory-grid .product-card').forEach(card => {
-      const name = card.getAttribute('data-prod-name') || '';
-      const sku  = card.getAttribute('data-prod-sku') || '';
-      const pcat = card.getAttribute('data-prod-cat') || '';
-      const okText = !q || name.includes(q) || sku.includes(q);
+      const name  = card.getAttribute('data-prod-name') || '';
+      const sku   = card.getAttribute('data-prod-sku') || '';
+      const pcat  = card.getAttribute('data-prod-cat') || '';
+      const pcatL = pcat.toLowerCase();
+      const okText = window._invCatMode
+        ? (!q || pcatL.includes(q))
+        : (!q || name.includes(q) || sku.includes(q) || pcatL.includes(q));
       const okCat  = (cat === 'all' || cat === '') || pcat === cat;
       card.style.display = (okText && okCat) ? '' : 'none';
     });
+    if (window._invCatMode) {
+      window.renderInvCatSuggestions(q);
+    } else {
+      window.hideInvCatSuggestions();
+    }
   };
+
+  window.toggleInvCatSearchMode = function() {
+    window._invCatMode = !window._invCatMode;
+    const btn   = document.getElementById('inv-cat-toggle');
+    const input = document.getElementById('inv-search');
+    if (btn) {
+      btn.classList.toggle('btn-primary', window._invCatMode);
+      btn.classList.toggle('btn-ghost', !window._invCatMode);
+      btn.title = window._invCatMode ? 'إلغاء البحث بالفئة' : 'بحث بالفئة فقط';
+    }
+    if (input) {
+      input.placeholder = window._invCatMode
+        ? 'ابحث باسم الفئة...'
+        : 'البحث باسم المنتج أو رقم الباركود أو الفئة...';
+      input.value = '';
+      input.focus();
+    }
+    window.filterInventory();
+  };
+
+  window.renderInvCatSuggestions = function(q) {
+    const box = document.getElementById('inv-cat-suggest');
+    if (!box) return;
+    const defaults = ['عام'];
+    const custom = (window._categories || []).map(c => c.name);
+    const all = Array.from(new Set([...defaults, ...custom]));
+    const ql = (q || '').toLowerCase();
+    const matches = all.filter(n => !ql || n.toLowerCase().includes(ql));
+    if (!matches.length) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    box.innerHTML = matches.map(name => {
+      const count = (window._products || []).filter(p => (p.cat || p.category) === name).length;
+      return `
+        <div class="gs-item" data-cat="${name}"
+          style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;cursor:pointer;transition:background .1s;"
+          onmousedown="invCatSuggestGo('${name.replace(/'/g, "\\'")}')"
+          onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+          <span style="display:flex;align-items:center;gap:8px;font-size:var(--text-sm);font-weight:600;">🏷️ ${name}</span>
+          <span style="font-size:var(--text-xs);color:var(--text-muted);">${count}</span>
+        </div>`;
+    }).join('');
+    box.style.display = 'block';
+  };
+
+  window.invCatSuggestGo = function(name) {
+    const input = document.getElementById('inv-search');
+    const sel   = document.getElementById('inv-cat-filter');
+    if (input) input.value = name;
+    if (sel) {
+      const opt = Array.from(sel.options).find(o => o.value === name || o.textContent === name);
+      if (opt) sel.value = opt.value;
+    }
+    window.filterInventory();
+    window.hideInvCatSuggestions();
+  };
+
+  window.hideInvCatSuggestions = function() {
+    const box = document.getElementById('inv-cat-suggest');
+    if (box) box.style.display = 'none';
+  };
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#inv-search') && !e.target.closest('#inv-cat-suggest') && !e.target.closest('#inv-cat-toggle')) {
+      window.hideInvCatSuggestions && window.hideInvCatSuggestions();
+    }
+  });
 
   window.refreshInvKpis = function() {
     const list = window._products || [];
@@ -5277,8 +5406,11 @@ ${bodyHTML}
   window.editProduct = function(id) {
     const p = (window._products || []).find(x => x.id === id);
     if (!p) { showToast('error','المنتج غير موجود'); return; }
-    const catSel = document.getElementById('edit-prod-cat');
-    if (catSel) catSel.innerHTML = generateCategoryOptions(p.cat || p.category || 'عام');
+    const catVal = p.cat || p.category || 'عام';
+    const catHidden = document.getElementById('edit-prod-cat');
+    const catSearch = document.getElementById('edit-prod-cat-search');
+    if (catHidden) catHidden.value = catVal;
+    if (catSearch) catSearch.value = catVal;
     const supSel = document.getElementById('edit-prod-supplier');
     if (supSel) { supSel.innerHTML = generateSupplierOptions(); supSel.value = p.supplier || ''; }
     const set = (eid, v) => { const el = document.getElementById(eid); if (el) el.value = v; };
@@ -5289,7 +5421,7 @@ ${bodyHTML}
     set('edit-prod-price', Number(p.price) || 0);
     set('edit-prod-cost', Number(p.cost) || 0);
     set('edit-prod-min', _prodMin(p));
-    if (catSel) catSel.value = p.cat || p.category || 'عام';
+    set('edit-prod-desc', p.desc || '');
     const _em = p.emoji || '📦';
     set('edit-prod-emoji', _em);
     const _emDsp = document.getElementById('edit-prod-emoji-display');
@@ -5317,6 +5449,7 @@ ${bodyHTML}
     p.supplier = supplier;
     p.supplierName = supName;
     p.emoji    = document.getElementById('edit-prod-emoji')?.value || '📦';
+    p.desc     = document.getElementById('edit-prod-desc')?.value.trim() || '';
     window._saveData();
     _checkLowStockNotify(p);
     _refreshProductsGrid();
@@ -5425,7 +5558,7 @@ ${bodyHTML}
     const input = document.getElementById('cat-name');
     const name  = (input?.value || '').trim();
     if (!name) { showToast('error','أدخل اسم الفئة'); return; }
-    const defaults = ['عام','مأكولات','مشروبات','قرطاسية','إلكترونيات','ملابس'];
+    const defaults = ['عام'];
     const exists = defaults.includes(name) || (window._categories||[]).some(c => c.name === name);
     if (exists) { showToast('warning','الفئة موجودة مسبقاً'); return; }
     if (!window._categories) window._categories = [];
@@ -5440,11 +5573,9 @@ ${bodyHTML}
       filter.value = sel;
     }
     const prodCat = document.getElementById('prod-cat');
-    if (prodCat) {
-      const currentVal = prodCat.value;
-      prodCat.innerHTML = generateCategoryOptions(currentVal || 'عام');
-      prodCat.value = name;
-    }
+    const prodCatSearch = document.getElementById('prod-cat-search');
+    if (prodCat) prodCat.value = name;
+    if (prodCatSearch) prodCatSearch.value = name;
     showToast('success', `تمت إضافة الفئة "${name}" ✓`);
   };
 
@@ -6977,7 +7108,7 @@ ${bodyHTML}
   window.generateReport = function(key, name) {
     const from = document.getElementById('rpt-from')?.value;
     const to   = document.getElementById('rpt-to')?.value;
-    const dateRange = (from || to) ? `<p style="color:#64748b;font-size:13px;margin-bottom:16px;">الفترة: ${from||'—'} إلى ${to||'—'}</p>` : '';
+    const dateRange = (key !== 'catQty' && (from || to)) ? `<p style="color:#64748b;font-size:13px;margin-bottom:16px;">الفترة: ${from||'—'} إلى ${to||'—'}</p>` : '';
     const userData  = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}');
     const statusMap = { paid:'مدفوعة', pending:'معلقة', overdue:'متأخرة', draft:'مسودة', quotation:'عرض سعر' };
     const bm        = { paid:'badge-paid', pending:'badge-pending', overdue:'badge-overdue', draft:'badge-draft' };
@@ -7013,6 +7144,24 @@ ${bodyHTML}
       inventory: {
         headers: ['#','المنتج','الكمية المتاحة','سعر البيع','الحد الأدنى'],
         rows: []
+      },
+      catQty: {
+        headers: ['#','الفئة','إجمالي الكمية'],
+        rows: (() => {
+          const defaults = ['عام'];
+          const custom = (window._categories||[]).map(c=>c.name);
+          const prodCats = (window._products||[]).map(p=>(p.cat||p.category||'').trim()).filter(Boolean);
+          const allCats = Array.from(new Set([...defaults, ...custom, ...prodCats]));
+          let grandTotal = 0;
+          const rows = allCats.map((catName, idx) => {
+            const total = (window._products||[]).filter(p=>(p.cat||p.category)===catName)
+              .reduce((sum,p)=>sum+(Number(p.stock)||0), 0);
+            grandTotal += total;
+            return `<tr><td>${idx+1}</td><td style="font-weight:700;">${catName}</td><td>${total}</td></tr>`;
+          });
+          rows.push(`<tr class="total-final"><td></td><td>المجموع</td><td>${grandTotal}</td></tr>`);
+          return rows;
+        })()
       },
       profit: {
         headers: ['البيان','المبلغ'],
@@ -7628,27 +7777,16 @@ ${bodyHTML}
     try { newData = JSON.parse(e.newValue); } catch(_) { return; }
     if (!Array.isArray(newData)) return;
 
-    const prevLen = (window[entry.prop] || []).length;
     window[entry.prop] = newData;
 
     if (entry.kind === 'invoices' && typeof window.updateSalesBadge === 'function') {
       window.updateSalesBadge();
     }
 
-    document.querySelectorAll('.sync-indicator').forEach(el => el.classList.add('syncing'));
-    setTimeout(() => document.querySelectorAll('.sync-indicator').forEach(el => el.classList.remove('syncing')), 1200);
-
-    const active = document.activeElement;
-    const isTyping = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
-    if (document.querySelector('.modal-overlay.open') || isTyping) return;
-
-    const current = (window.location.hash || '#dashboard').replace('#', '') || 'dashboard';
-    if (typeof window.navigate === 'function') window.navigate(current);
-
-    if (entry.kind === 'invoices' && newData.length > prevLen) {
-      showToast('success', '🏪 بيع جديد من الكاشير — تم التحديث تلقائياً');
-    } else if (entry.kind === 'products' && newData.length === prevLen) {
-    }
+    // ملاحظة: تم تعطيل إعادة عرض الصفحة (navigate) عند تحديث بيانات من تبويب آخر لنفس المتصفح
+    // (مثلاً صفحة الكاشير)، بناءً على طلب المستخدم بعدم التحديث التلقائي للداشبورد بين التبويبات.
+    // البيانات في الذاكرة (window[entry.prop]) لا تزال تُحدَّث، لذا أي عملية تنقّل يدوية لاحقة
+    // ستعرض أحدث البيانات. مزامنة Firestore اللحظية (بين أجهزة/متصفحات مختلفة) غير متأثرة بهذا التعديل.
   });
 
   document.addEventListener('click', (e) => {
