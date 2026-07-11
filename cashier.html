@@ -209,7 +209,16 @@
             <span class="search-icon">🔍</span>
           </div>
         </div>
-        <div class="category-scroll" id="categories"></div>
+        <div class="category-search-wrap" id="category-search-wrap" style="position:relative;">
+          <div class="search-wrap">
+            <input class="search-input" type="text" id="category-search"
+              placeholder="🏷️ كل الفئات — اضغط أو اكتب للبحث"
+              onclick="openCatSuggest()" onfocus="openCatSuggest()"
+              oninput="renderCatSuggestions(this.value)" autocomplete="off" />
+            <span class="search-icon">🏷️</span>
+          </div>
+          <div id="cat-suggest" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;max-height:280px;overflow-y:auto;"></div>
+        </div>
       </div>
       <!-- Service bar -->
       <div class="service-bar">
@@ -605,6 +614,12 @@
     return u.uid || u.email || 'guest';
   }
 
+  // Tracks the uid we last authenticated for, so a redundant onAuthStateChanged
+  // fire for the SAME user (Firebase's cross-tab auth persistence can trigger
+  // this when another tab, e.g. dashboard.html, opens its own Auth instance)
+  // does not reset the login screen or re-register duplicate live-sync listeners.
+  let _lastAuthedUid = null;
+
   // Union two record arrays by id; on conflict keep the newer (by timestamp), else remote.
   function _mergeById(localArr, remoteArr) {
     const ts = o => Number(o && (o.updatedAt || o._updatedAt || o.timestamp || o.createdAt)) || 0;
@@ -704,6 +719,9 @@
     // STAGE 1 result: react to the company account's auth state.
     onAuthStateChanged(auth, async (user) => {
       if (user) {
+        if (_lastAuthedUid === user.uid) return; // redundant fire for the same user — ignore
+        _lastAuthedUid = user.uid;
+
         // Make sure the account identity is in sessionStorage so _acctKey() resolves.
         let su = {};
         try { su = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}'); } catch(e) {}
@@ -716,6 +734,7 @@
         _startCashierLiveSync(db, _acctKey());
         if (typeof window.__onAccountAuthed === 'function') window.__onAccountAuthed();
       } else {
+        _lastAuthedUid = null;
         if (typeof window.__onAccountSignedOut === 'function') window.__onAccountSignedOut();
       }
     });
@@ -1153,6 +1172,7 @@ function normalizeProduct(p) {
     stock: (p.stock === undefined || p.stock === null) ? null : Number(p.stock),
     sku:   p.sku || '',
     cat:   p.cat || p.category || 'other',
+    desc:  p.desc || '',
     emoji: p.emoji || CAT_ICONS[p.cat || p.category || 'other'] || '📦',
     active: p.active !== false,
   };
@@ -1201,16 +1221,79 @@ function syncNow(btn) {
 // ============================================================
 function renderCategories() {
   const cats = Array.from(new Set(products.map(p => p.cat))).filter(Boolean);
-  const bar = document.getElementById('categories');
-  let html = `<button class="cat-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all',this)">
-      <span class="cat-btn-icon">🏷️</span> الكل</button>`;
-  cats.forEach(c => {
-    html += `<button class="cat-btn ${activeCategory===c?'active':''}" onclick="filterCategory('${c}',this)">
-      <span class="cat-btn-icon">${CAT_ICONS[c]||'📦'}</span> ${CAT_LABELS[c]||c}</button>`;
-  });
-  bar.innerHTML = html;
-  bar.style.display = cats.length > 1 ? '' : 'none';
+  window._catList = cats;
+  const wrap = document.getElementById('category-search-wrap');
+  if (wrap) wrap.style.display = cats.length > 1 ? '' : 'none';
+  const input = document.getElementById('category-search');
+  // Don't clobber text the cashier is actively typing/searching.
+  if (input && document.activeElement !== input) {
+    input.value = activeCategory === 'all' ? '' : (CAT_LABELS[activeCategory] || activeCategory);
+  }
+  const box = document.getElementById('cat-suggest');
+  if (box && box.style.display !== 'none') renderCatSuggestions(input ? input.value : '');
 }
+
+function openCatSuggest() {
+  const input = document.getElementById('category-search');
+  renderCatSuggestions(input ? input.value : '');
+}
+
+function renderCatSuggestions(q) {
+  const box = document.getElementById('cat-suggest');
+  if (!box) return;
+  const cats = window._catList || Array.from(new Set(products.map(p => p.cat))).filter(Boolean);
+  const ql = (q || '').toLowerCase().trim();
+  const items = [];
+  if (!ql || 'الكل'.includes(ql)) {
+    items.push({ cat: 'all', label: 'الكل', icon: '🏷️', count: products.length });
+  }
+  cats.forEach(c => {
+    const label = CAT_LABELS[c] || c;
+    if (!ql || label.toLowerCase().includes(ql) || c.toLowerCase().includes(ql)) {
+      items.push({ cat: c, label, icon: CAT_ICONS[c] || '📦', count: products.filter(p => p.cat === c).length });
+    }
+  });
+  if (!items.length) {
+    box.innerHTML = `<div style="padding:10px 14px;color:var(--text-muted);font-size:var(--text-sm);">لا توجد فئات مطابقة</div>`;
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = items.map(it => `
+    <div class="gs-item" data-cat="${it.cat}"
+      style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;cursor:pointer;transition:background .1s;${activeCategory===it.cat?'background:var(--primary-light);':''}"
+      onmousedown="selectCategorySearch('${it.cat.replace(/'/g, "\\'")}')"
+      onmouseover="this.style.background='var(--primary-light)'"
+      onmouseout="this.style.background='${activeCategory===it.cat?'var(--primary-light)':''}'">
+      <span style="display:flex;align-items:center;gap:8px;font-size:var(--text-sm);font-weight:600;">${it.icon} ${it.label}</span>
+      <span style="font-size:var(--text-xs);color:var(--text-muted);">${it.count}</span>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+
+function selectCategorySearch(cat) {
+  filterCategory(cat, null);
+  const input = document.getElementById('category-search');
+  if (input) input.value = cat === 'all' ? '' : (CAT_LABELS[cat] || cat);
+  hideCatSuggest();
+}
+
+function hideCatSuggest() {
+  const box = document.getElementById('cat-suggest');
+  if (box) box.style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#category-search') && !e.target.closest('#cat-suggest')) {
+    const box = document.getElementById('cat-suggest');
+    if (box && box.style.display !== 'none') {
+      hideCatSuggest();
+      // Reset the field to reflect the actual applied filter if the cashier
+      // typed something but clicked away without picking a category.
+      const input = document.getElementById('category-search');
+      if (input) input.value = activeCategory === 'all' ? '' : (CAT_LABELS[activeCategory] || activeCategory);
+    }
+  }
+});
 
 function cartQty(productId) {
   const it = cart.find(i => i.id === productId);
@@ -1250,6 +1333,7 @@ function renderProducts() {
       const bg = low ? 'var(--warning)' : 'var(--success,#16a34a)';
       availBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:${bg};color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">● متوفر · ${remaining}</span>`;
     }
+    const descLine = p.desc ? `<div class="pos-product-desc"><span style="font-weight:700;">الوصف:</span> ${p.desc}</div>` : '';
     return `
     <div class="pos-product" onclick="addToCart('${p.id}')" ${disabled ? 'style="opacity:.5;pointer-events:none;"' : ''}>
       <div style="padding:6px 8px 0;text-align:center;">${availBadge}</div>
@@ -1258,6 +1342,7 @@ function renderProducts() {
       </div>
       <div class="pos-product-body">
         <div class="pos-product-name">${p.name}</div>
+        ${descLine}
         <div class="pos-product-unit" style="font-size:10px;color:var(--text-muted);">${p.sku || '—'}</div>
         <div class="pos-product-price">${fmt(p.price)}</div>
       </div>
@@ -2367,6 +2452,10 @@ function tickClock() {
 // its data is hydrated. Hides the account-login screen and reveals the cashier
 // (employee) login — or resumes an in-progress cashier session after a refresh.
 window.__onAccountAuthed = function() {
+  // Keep the loading overlay up until we actually know which screen to show
+  // (pos-lock vs pos-shell) — see the DOMContentLoaded handler below for why.
+  const lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('active');
+
   window._appSettings = _loadAcct('settings', {}) || {};
   const al = document.getElementById('account-lock'); if (al) al.style.display = 'none';
 
@@ -2480,7 +2569,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { reloadProducts(); enforceLeaveGuard(); } });
   window.addEventListener('focus', () => { reloadProducts(); enforceLeaveGuard(); });
 
-  document.getElementById('loading-overlay').classList.remove('active');
+  // The loading overlay is normally removed by __onAccountAuthed() once the
+  // Firebase auth check resolves and the correct screen (cashier login or
+  // POS) is ready to display — removing it here unconditionally (before that
+  // check finishes) used to leave a blank flash between DOMContentLoaded and
+  // the auth result, most noticeable when the page is opened as a fresh tab
+  // (e.g. from the dashboard's "نقطة البيع" link), which looked like the
+  // page reloading itself twice. Safety net only: force it closed if
+  // something goes wrong and neither __onAccountAuthed nor
+  // __onAccountSignedOut ever runs.
+  setTimeout(() => {
+    const lo = document.getElementById('loading-overlay');
+    if (lo) lo.classList.remove('active');
+  }, 8000);
 });
 
 // Close modals on overlay click
