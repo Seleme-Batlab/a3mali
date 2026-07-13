@@ -69,26 +69,29 @@
     _fsSync('settings', s);
   };
 
-  window._invoices    = _loadAcct('invoices',  []);
-  window._customers   = _loadAcct('customers', []);
-  window._products    = _loadAcct('products',  []);
-  window._suppliers   = _loadAcct('suppliers', []);
-  window._expenses    = _loadAcct('expenses',  []);
-  window._cashbox     = _loadAcct('cashbox',     []);
-  window._workOrders  = _loadAcct('workOrders',  []);
-  window._employees   = _loadAcct('employees',   []);
-  window._stockMoves      = _loadAcct('stockMoves',      []);
-  window._categories      = _loadAcct('categories',      []);
-  window._debts           = _loadAcct('debts',           []);
-  window._printTemplates  = _loadAcct('printTemplates',  {});
-  window._purchases   = _loadAcct('purchases',   []);
-  window._salesReps   = _loadAcct('salesReps',   []);
-  window._salesTargets= _loadAcct('salesTargets',[]);
-  window._installments= _loadAcct('installments',[]);
-  window._leaves      = _loadAcct('leaves',      []);
-  window._payroll     = _loadAcct('payroll',     []);
-  window._entries     = _loadAcct('entries',     []);   // قيود محاسبية يدوية
-  window._appSettings = _loadAcct('settings',    {});
+  window._reloadAllFromStorage = function() {
+    window._invoices    = _loadAcct('invoices',  []);
+    window._customers   = _loadAcct('customers', []);
+    window._products    = _loadAcct('products',  []);
+    window._suppliers   = _loadAcct('suppliers', []);
+    window._expenses    = _loadAcct('expenses',  []);
+    window._cashbox     = _loadAcct('cashbox',     []);
+    window._workOrders  = _loadAcct('workOrders',  []);
+    window._employees   = _loadAcct('employees',   []);
+    window._stockMoves      = _loadAcct('stockMoves',      []);
+    window._categories      = _loadAcct('categories',      []);
+    window._debts           = _loadAcct('debts',           []);
+    window._printTemplates  = _loadAcct('printTemplates',  {});
+    window._purchases   = _loadAcct('purchases',   []);
+    window._salesReps   = _loadAcct('salesReps',   []);
+    window._salesTargets= _loadAcct('salesTargets',[]);
+    window._installments= _loadAcct('installments',[]);
+    window._leaves      = _loadAcct('leaves',      []);
+    window._payroll     = _loadAcct('payroll',     []);
+    window._entries     = _loadAcct('entries',     []);   // قيود محاسبية يدوية
+    window._appSettings = _loadAcct('settings',    {});
+  };
+  window._reloadAllFromStorage();
 
   const _liveSyncProp = {
     invoices: '_invoices', products: '_products', customers: '_customers',
@@ -1325,8 +1328,8 @@ ${bodyHTML}
       <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
         <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">📦</div><div class="kpi-info"><div class="kpi-label">إجمالي المنتجات</div><div class="kpi-value" id="inv-kpi-total">0</div></div></div>
         <div class="kpi-card"><div class="kpi-icon kpi-icon-green">✅</div><div class="kpi-info"><div class="kpi-label">في المخزون</div><div class="kpi-value" id="inv-kpi-instock">0</div></div></div>
-        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">⚠️</div><div class="kpi-info"><div class="kpi-label">مخزون منخفض</div><div class="kpi-value" id="inv-kpi-low">0</div></div></div>
-        <div class="kpi-card"><div class="kpi-icon kpi-icon-red">❌</div><div class="kpi-info"><div class="kpi-label">نفد من المخزون</div><div class="kpi-value" id="inv-kpi-out">0</div></div></div>
+        <div class="kpi-card" style="cursor:pointer;" onclick="showStockAlertList('low')"><div class="kpi-icon kpi-icon-amber">⚠️</div><div class="kpi-info"><div class="kpi-label">مخزون منخفض</div><div class="kpi-value" id="inv-kpi-low">0</div></div></div>
+        <div class="kpi-card" style="cursor:pointer;" onclick="showStockAlertList('out')"><div class="kpi-icon kpi-icon-red">❌</div><div class="kpi-info"><div class="kpi-label">نفد من المخزون</div><div class="kpi-value" id="inv-kpi-out">0</div></div></div>
       </div>
 
       <!-- Total inventory value (valued at cost), shown in both USD and SYP -->
@@ -1390,7 +1393,7 @@ ${bodyHTML}
           <div class="search-wrap" style="flex:1;max-width:340px;position:relative;">
             <input class="search-input" type="text" id="inv-search" placeholder="البحث باسم المنتج أو رقم الباركود أو الفئة..." oninput="filterInventory()" autocomplete="off" style="padding-left:34px;" />
             <span class="search-icon">🔍</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="inv-cat-toggle" title="بحث بالفئة فقط" onclick="toggleInvCatSearchMode()" style="position:absolute;top:50%;left:6px;transform:translateY(-50%);padding:2px 8px;">🏷️</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="inv-cat-toggle" title="بحث بالفئة فقط" onclick="toggleInvCatSearchMode()" style="position:absolute;top:50%;left:6px;transform:translateY(-50%);padding:2px 8px;width:auto;min-width:0;">🏷️</button>
             <div id="inv-cat-suggest" style="display:none;position:absolute;top:calc(100% + 6px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:400;overflow:hidden;max-height:280px;overflow-y:auto;"></div>
           </div>
           <select class="form-select" id="inv-cat-filter" style="max-width:200px;" onchange="filterInventory()">
@@ -1570,10 +1573,7 @@ ${bodyHTML}
             <div class="form-group"><label class="form-label">سعر البيع <span>*</span></label><input type="number" class="form-input" id="edit-prod-price" /></div>
             <div class="form-group"><label class="form-label">سعر التكلفة</label><input type="number" class="form-input" id="edit-prod-cost" /></div>
           </div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">حد المخزون الأدنى</label><input type="number" class="form-input" id="edit-prod-min" /></div>
-            <div class="form-group"><label class="form-label">المورد</label><select class="form-select" id="edit-prod-supplier"></select></div>
-          </div>
+          <div class="form-group"><label class="form-label">المورد</label><select class="form-select" id="edit-prod-supplier"></select></div>
           <div class="form-group" style="margin-top:var(--sp-3);">
             <label class="form-label">أيقونة المنتج</label>
             <div style="position:relative;">
@@ -1630,12 +1630,46 @@ ${bodyHTML}
         </div>
       </div>
     </div>
+
+    <!-- Stock Alert List Modal (low stock / out of stock) -->
+    <div class="modal-overlay" id="stock-alert-modal">
+      <div class="modal modal-lg">
+        <div class="modal-header">
+          <h3 class="modal-title" id="stock-alert-title">منتجات</h3>
+          <button class="modal-close" onclick="closeModal('stock-alert-modal')">✕</button>
+        </div>
+        <div class="modal-body" id="stock-alert-body" style="padding:var(--sp-4);"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('stock-alert-modal')">إغلاق</button>
+        </div>
+      </div>
+    </div>
     `;
   }
 
   function _prodMin(p) {
     const g = window._appSettings && window._appSettings.minStockAlert;
-    return p.minStock != null ? Number(p.minStock) : (g != null ? Number(g) : 5);
+    return g != null ? Number(g) : 5;
+  }
+
+  const _INV_PAGE_SIZE = 15;
+  let _invShownCount = _INV_PAGE_SIZE;
+
+  function _getFilteredInvProducts() {
+    const list = (window._products || []);
+    const q   = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
+    const cat = document.getElementById('inv-cat-filter')?.value || 'all';
+    return list.filter(p => {
+      const name  = (p.name || '').toLowerCase();
+      const sku   = (p.sku || '').toLowerCase();
+      const pcat  = p.cat || p.category || '';
+      const pcatL = pcat.toLowerCase();
+      const okText = window._invCatMode
+        ? (!q || pcatL.includes(q))
+        : (!q || name.includes(q) || sku.includes(q) || pcatL.includes(q));
+      const okCat = (cat === 'all' || cat === '') || pcat === cat;
+      return okText && okCat;
+    });
   }
 
   function generateProductCards() {
@@ -1650,8 +1684,33 @@ ${bodyHTML}
       </div>
     `;
     }
-    return list.map((p, i) => generateProductCard(p, i, list.length)).join('');
+    const filtered = _getFilteredInvProducts();
+    if (!filtered.length) {
+      return `
+      <div class="empty-state" style="grid-column:1/-1;background:var(--surface);border-radius:var(--r-xl);border:1px dashed var(--border);padding:var(--sp-16);">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">لا توجد نتائج مطابقة</div>
+        <div class="empty-desc">جرّب كلمة بحث أو فئة مختلفة</div>
+      </div>
+    `;
+    }
+    const shown = filtered.slice(0, _invShownCount);
+    let html = shown.map((p, i) => generateProductCard(p, i, filtered.length)).join('');
+    if (filtered.length > shown.length) {
+      html += `
+      <div style="grid-column:1/-1;text-align:center;padding:var(--sp-4) 0;">
+        <button class="btn btn-secondary" onclick="loadMoreInvProducts()">⬇️ تحميل المزيد (${filtered.length - shown.length} متبقي)</button>
+      </div>
+    `;
+    }
+    return html;
   }
+
+  window.loadMoreInvProducts = function() {
+    _invShownCount += _INV_PAGE_SIZE;
+    const grid = document.getElementById('inventory-grid');
+    if (grid) grid.innerHTML = generateProductCards();
+  };
 
   function generateProductCard(p, i, total) {
     const supLine = p.supplierName
@@ -5111,7 +5170,6 @@ ${bodyHTML}
     const stock = document.getElementById('prod-stock')?.value || '0';
     const currency = document.getElementById('prod-currency')?.value || 'SYP';
     const cat   = document.getElementById('prod-cat')?.value || 'عام';
-    const minStock = document.getElementById('prod-min-stock')?.value || '5';
     const supplier = document.getElementById('prod-supplier')?.value || '';
     if (!name) { showToast('error','أدخل اسم المنتج'); return; }
 
@@ -5121,7 +5179,7 @@ ${bodyHTML}
     const prod = {
       id:'PRD-'+Date.now().toString().slice(-6),
       name, sku, price:Number(price)||0, cost:Number(cost)||0, currency,
-      cat, category:cat, minStock:Number(minStock)||0,
+      cat, category:cat,
       stock:Number(stock)||0, supplier, supplierName:supName, emoji, desc,
       active: true, createdAt: Date.now(),
     };
@@ -5139,7 +5197,6 @@ ${bodyHTML}
       if (el) el.value = '';
     });
     const stEl  = document.getElementById('prod-stock');     if (stEl)  stEl.value  = '0';
-    const minEl = document.getElementById('prod-min-stock'); if (minEl) minEl.value = '5';
     const catEl = document.getElementById('prod-cat');       if (catEl) catEl.value = 'عام';
     const catSearchEl = document.getElementById('prod-cat-search'); if (catSearchEl) catSearchEl.value = 'عام';
     const supEl = document.getElementById('prod-supplier'); if (supEl) supEl.value = '';
@@ -5199,7 +5256,6 @@ ${bodyHTML}
   function _refreshProductsGrid() {
     const grid = document.getElementById('inventory-grid');
     if (grid) grid.innerHTML = generateProductCards();
-    filterInventory();
     refreshInvKpis();
   }
   function _refreshMovesPanel() {
@@ -5238,19 +5294,10 @@ ${bodyHTML}
   window._invCatMode = window._invCatMode || false;
 
   window.filterInventory = function() {
-    const q   = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
-    const cat = document.getElementById('inv-cat-filter')?.value || 'all';
-    document.querySelectorAll('#inventory-grid .product-card').forEach(card => {
-      const name  = card.getAttribute('data-prod-name') || '';
-      const sku   = card.getAttribute('data-prod-sku') || '';
-      const pcat  = card.getAttribute('data-prod-cat') || '';
-      const pcatL = pcat.toLowerCase();
-      const okText = window._invCatMode
-        ? (!q || pcatL.includes(q))
-        : (!q || name.includes(q) || sku.includes(q) || pcatL.includes(q));
-      const okCat  = (cat === 'all' || cat === '') || pcat === cat;
-      card.style.display = (okText && okCat) ? '' : 'none';
-    });
+    _invShownCount = _INV_PAGE_SIZE;
+    const grid = document.getElementById('inventory-grid');
+    if (grid) grid.innerHTML = generateProductCards();
+    const q = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
     if (window._invCatMode) {
       window.renderInvCatSuggestions(q);
     } else {
@@ -5372,6 +5419,44 @@ ${bodyHTML}
   };
   function refreshInvKpis() { return window.refreshInvKpis(); }
 
+  window.showStockAlertList = function(type) {
+    const list = (window._products || []).filter(p => {
+      const s = Number(p.stock) || 0;
+      const m = _prodMin(p);
+      return type === 'out' ? s <= 0 : (s > 0 && s <= m);
+    });
+    const titleEl = document.getElementById('stock-alert-title');
+    if (titleEl) titleEl.textContent = type === 'out' ? 'منتجات نفدت من المخزون ❌' : 'منتجات مخزونها منخفض ⚠️';
+
+    const rows = list.map(p => {
+      const s = Number(p.stock) || 0;
+      const m = _prodMin(p);
+      return `
+        <tr>
+          <td>${p.emoji || '📦'} ${p.name || '—'}</td>
+          <td>${p.cat || p.category || '—'}</td>
+          <td style="font-weight:700;color:${type === 'out' ? 'var(--danger)' : 'var(--warning)'};">${s}</td>
+          <td>${m}</td>
+          <td style="white-space:nowrap;display:flex;gap:var(--sp-2);">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal('stock-alert-modal');editProduct('${p.id}')">تعديل</button>
+            <button class="btn btn-primary btn-sm" onclick="closeModal('stock-alert-modal');openAddQty('${p.id}')">+ كمية</button>
+          </td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:var(--sp-8);">لا توجد منتجات</td></tr>`;
+
+    const body = document.getElementById('stock-alert-body');
+    if (body) {
+      body.innerHTML = `
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>المنتج</th><th>الفئة</th><th>الكمية الحالية</th><th>الحد الأدنى</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+    openModal('stock-alert-modal');
+  };
+
   window.toggleEmojiPicker = function(which, event) {
     if (event) event.stopPropagation();
     const pickerId = 'emoji-picker-' + which;
@@ -5420,7 +5505,6 @@ ${bodyHTML}
     set('edit-prod-currency', p.currency || 'SYP');
     set('edit-prod-price', Number(p.price) || 0);
     set('edit-prod-cost', Number(p.cost) || 0);
-    set('edit-prod-min', _prodMin(p));
     set('edit-prod-desc', p.desc || '');
     const _em = p.emoji || '📦';
     set('edit-prod-emoji', _em);
@@ -5445,7 +5529,6 @@ ${bodyHTML}
     p.currency = document.getElementById('edit-prod-currency')?.value || 'SYP';
     p.price    = Number(document.getElementById('edit-prod-price')?.value) || 0;
     p.cost     = Number(document.getElementById('edit-prod-cost')?.value) || 0;
-    p.minStock = Number(document.getElementById('edit-prod-min')?.value) || 0;
     p.supplier = supplier;
     p.supplierName = supName;
     p.emoji    = document.getElementById('edit-prod-emoji')?.value || '📦';

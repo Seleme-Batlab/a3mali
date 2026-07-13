@@ -85,29 +85,36 @@
                          'purchases','salesReps','salesTargets',
                          'installments','leaves','payroll','entries'];
     const objStores   = ['settings','printTemplates'];
-    for (const kind of arrayStores) {
+
+    const hydrateArrayKind = async (kind) => {
       const localKey = 'a3mali_' + kind + '_' + acctKey;
       try {
         const snap = await getDoc(doc(db, 'accounts/' + acctKey + '/data/' + kind));
-        if (!snap.exists()) continue;
+        if (!snap.exists()) return;
         const d = snap.data();
         const remote = Array.isArray(d.items) ? d.items : (Array.isArray(d) ? d : []);
         let local = [];
         try { local = JSON.parse(localStorage.getItem(localKey) || '[]'); } catch(e) {}
         localStorage.setItem(localKey, JSON.stringify(_mergeById(local, remote)));
       } catch(e) { }
-    }
-    for (const kind of objStores) {
+    };
+
+    const hydrateObjKind = async (kind) => {
       const localKey = 'a3mali_' + kind + '_' + acctKey;
-      if (localStorage.getItem(localKey) !== null) continue;
+      if (localStorage.getItem(localKey) !== null) return;
       try {
         const snap = await getDoc(doc(db, 'accounts/' + acctKey + '/data/' + kind));
-        if (!snap.exists()) continue;
+        if (!snap.exists()) return;
         const d = snap.data();
         const payload = (d && d.items !== undefined) ? d.items : d;
         if (payload && typeof payload === 'object') localStorage.setItem(localKey, JSON.stringify(payload));
       } catch(e) { }
-    }
+    };
+
+    await Promise.all([
+      ...arrayStores.map(hydrateArrayKind),
+      ...objStores.map(hydrateObjKind),
+    ]);
   }
 
   const _liveSyncKinds = ['products','customers','debts','stockMoves','cashbox'];
@@ -240,8 +247,7 @@
       _entryGranted = true;
 
       if (hydratePromise) await hydratePromise;
-
-      showLoading(false);
+      if (typeof window._reloadAllFromStorage === 'function') window._reloadAllFromStorage();
 
       const userData = JSON.parse(sessionStorage.getItem('a3mali_user') || '{}');
       const initials = (userData.name || 'م').charAt(0);
@@ -280,21 +286,24 @@
       window.addEventListener('offline', () => updateSyncStatus('offline'));
       updateSyncStatus(navigator.onLine ? 'online' : 'offline');
     } catch (err) {
-      showLoading(false);
       console.warn('Dashboard setup error (continuing to render):', err);
     }
 
     const hash = window.location.hash.replace('#','') || 'dashboard';
     if (typeof window.navigate === 'function') {
-      window.navigate(hash);
+      await window.navigate(hash);
     } else {
-      const waitNav = setInterval(() => {
-        if (typeof window.navigate === 'function') {
-          clearInterval(waitNav);
-          window.navigate(hash);
-        }
-      }, 50);
+      await new Promise((resolve) => {
+        const waitNav = setInterval(() => {
+          if (typeof window.navigate === 'function') {
+            clearInterval(waitNav);
+            window.navigate(hash).then(resolve);
+          }
+        }, 50);
+      });
     }
+
+    showLoading(false);
   };
 
   function getRoleLabel(role) {
