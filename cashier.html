@@ -1300,6 +1300,19 @@ function cartQty(productId) {
   return it ? it.qty : 0;
 }
 
+const POS_PAGE_SIZE = 15;
+let posShownCount = POS_PAGE_SIZE;
+
+function posNoFilterActive() {
+  const q = (document.getElementById('product-search')?.value || '').trim();
+  return !q && activeCategory === 'all';
+}
+
+function loadMorePosProducts() {
+  posShownCount += POS_PAGE_SIZE;
+  renderProducts();
+}
+
 function renderProducts() {
   const grid = document.getElementById('products-grid');
   if (!products.length) {
@@ -1315,7 +1328,9 @@ function renderProducts() {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🔍</div><div class="empty-title">لا توجد نتائج</div></div>`;
     return;
   }
-  grid.innerHTML = filteredProducts.map(p => {
+  const noFilter = posNoFilterActive();
+  const list = noFilter ? filteredProducts.slice(0, posShownCount) : filteredProducts;
+  let html = list.map(p => {
     const tracked   = p.stock !== null;
     const remaining = tracked ? (p.stock - cartQty(p.id)) : null;
     const out = tracked && remaining <= 0;
@@ -1348,6 +1363,12 @@ function renderProducts() {
       </div>
     </div>`;
   }).join('');
+  if (noFilter && filteredProducts.length > list.length) {
+    html += `<div style="grid-column:1/-1;text-align:center;padding:var(--sp-4) 0;">
+      <button class="btn btn-secondary" onclick="loadMorePosProducts()">⬇️ عرض ١٥ منتج آخر (${filteredProducts.length - list.length} متبقي)</button>
+    </div>`;
+  }
+  grid.innerHTML = html;
 }
 
 function searchProducts(q) {
@@ -1355,6 +1376,7 @@ function searchProducts(q) {
   const base = activeCategory === 'all' ? products : products.filter(p => p.cat === activeCategory);
   filteredProducts = !q ? [...base] : base.filter(p =>
     (p.name||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q));
+  posShownCount = POS_PAGE_SIZE;
   renderProducts();
 }
 

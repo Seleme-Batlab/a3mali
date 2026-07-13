@@ -190,13 +190,16 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">رمز الدخول الشخصي (PIN) <span>*</span></label>
+            <label class="form-label">رمز الدخول الشخصي (PIN) <span style="color:var(--text-muted);font-weight:400;">(اختياري)</span></label>
+            <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">
+              غير إجباري — لكن إذا تركته فارغاً فلن تتمكن من منع موظفيك من الدخول إلى لوحة التحكم.
+            </div>
             <div class="password-wrap">
-              <input type="password" id="reg-pin" class="form-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="٤ إلى ٦ أرقام" required autocomplete="off" />
+              <input type="password" id="reg-pin" class="form-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="٤ إلى ٦ أرقام (اختياري)" autocomplete="off" />
               <span class="password-toggle" onclick="togglePass('reg-pin', this)">👁</span>
             </div>
             <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">
-              🔒 ستُطلب منك إدخال هذا الرمز في كل مرة تفتح فيها لوحة التحكم.
+              🔒 إذا حددت رمزاً، سيُطلب إدخاله في كل مرة تُفتح فيها لوحة التحكم (بما في ذلك من قبل الموظفين).
             </div>
           </div>
 
@@ -474,8 +477,8 @@
       showError('reg-error', 'reg-error-msg', 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
       return;
     }
-    if (!/^\d{4,6}$/.test(pin)) {
-      showError('reg-error', 'reg-error-msg', 'رمز الدخول الشخصي يجب أن يكون من ٤ إلى ٦ أرقام.');
+    if (pin && !/^\d{4,6}$/.test(pin)) {
+      showError('reg-error', 'reg-error-msg', 'رمز الدخول الشخصي يجب أن يكون من ٤ إلى ٦ أرقام، أو اتركه فارغاً.');
       return;
     }
 
