@@ -204,7 +204,7 @@
         <div class="products-search">
           <div class="search-wrap">
             <input class="search-input" type="text" id="product-search"
-              placeholder="ابحث باسم المنتج أو الباركود (F2)..."
+              placeholder="ابحث باسم المنتج أو الباركود أو الفئة (F2)..."
               onkeyup="searchProducts(this.value)" autocomplete="off" />
             <span class="search-icon">🔍</span>
           </div>
@@ -871,11 +871,17 @@ function fmt(amount) {
   return val.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' ' + sym;
 }
 function baseCur() {
-  return (window._appSettings && window._appSettings.cashierCurrency)
-      || (window.Currency ? window.Currency.base : 'SYP');
+  const preferred = window._appSettings && window._appSettings.cashierCurrency;
+  if (preferred && window.Currency && !window.Currency.isHidden(preferred)) return preferred;
+  return window.Currency ? window.Currency.base : (preferred || 'SYP');
 }
 // Currency the customer is actually paying in (may differ from cashier display currency)
-function payCur() { return paymentCurrency || baseCur(); }
+function payCur() {
+  if (paymentCurrency && window.Currency && window.Currency.isHidden(paymentCurrency)) {
+    paymentCurrency = null; // العملة أصبحت مخفية، ارجع لعملة العرض الافتراضية
+  }
+  return paymentCurrency || baseCur();
+}
 
 // Format amount (stored in window.Currency.base) for payment display in payCur()
 // Format payment method label with currency name, e.g. "نقد · ليرة سورية"
@@ -922,8 +928,22 @@ function grandInPayCur() {
     : t.grand;
 }
 
+// Hide/show currency-selector buttons across the cashier screen based on
+// which currencies are hidden from the whole system (window.Currency).
+function _applyCurrencyVisibility() {
+  if (!window.Currency) return;
+  ['SYP', 'USD', 'TRY'].forEach(code => {
+    const hidden = window.Currency.isHidden(code);
+    const payBtn = document.getElementById('pc-' + code.toLowerCase());
+    if (payBtn) payBtn.style.display = hidden ? 'none' : '';
+    const svcBtn = document.getElementById('svc-cur-' + code.toLowerCase());
+    if (svcBtn) svcBtn.style.display = hidden ? 'none' : '';
+  });
+}
+
 // Sync the toggle button highlight to the current payCur() without changing paymentCurrency
 function _initPayCurUI() {
+  _applyCurrencyVisibility();
   document.querySelectorAll('.pay-cur-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('pc-' + payCur().toLowerCase());
   if (btn) btn.classList.add('active');
@@ -1371,11 +1391,23 @@ function renderProducts() {
   grid.innerHTML = html;
 }
 
+// Normalizes text for search matching: lowercases and strips all whitespace,
+// so e.g. "not15" matches a product named "Redmi Note 15".
+function _searchNorm(s) {
+  return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+}
+
 function searchProducts(q) {
-  q = (q||'').toLowerCase().trim();
+  q = _searchNorm(q);
   const base = activeCategory === 'all' ? products : products.filter(p => p.cat === activeCategory);
-  filteredProducts = !q ? [...base] : base.filter(p =>
-    (p.name||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q));
+  filteredProducts = !q ? [...base] : base.filter(p => {
+    const name    = _searchNorm(p.name);
+    const sku     = _searchNorm(p.sku);
+    const catRaw  = p.cat || p.category || '';
+    const catKey  = _searchNorm(catRaw);
+    const catLbl  = _searchNorm(CAT_LABELS[catRaw] || catRaw);
+    return name.includes(q) || sku.includes(q) || catKey.includes(q) || catLbl.includes(q);
+  });
   posShownCount = POS_PAGE_SIZE;
   renderProducts();
 }
@@ -1444,8 +1476,10 @@ function openServiceModal() {
   document.getElementById('svc-price').value = '';
   document.getElementById('svc-cost').value  = '0';
   document.getElementById('svc-notes').value = '';
-  _svcCurrency = 'SYP';
-  selectSvcCur('SYP');
+  _applyCurrencyVisibility();
+  const defCur = (window.Currency && window.Currency.isHidden('SYP')) ? window.Currency.base : 'SYP';
+  _svcCurrency = defCur;
+  selectSvcCur(defCur);
   openModal('service-modal');
   setTimeout(() => document.getElementById('svc-name').focus(), 100);
 }
