@@ -149,6 +149,12 @@
   .totals{display:flex;justify-content:flex-end;margin-top:18px;}
   .totals table{width:320px;}
   .total-final td{font-weight:800;font-size:16px;color:#3b82f6;}
+  .cat-qty-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+  .cat-qty-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;}
+  .cat-qty-name{font-weight:700;color:#1e293b;font-size:13px;}
+  .cat-qty-val{font-weight:800;color:#3b82f6;font-size:14px;}
+  .cat-qty-total{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding:12px 16px;background:#eff6ff;border:2px solid #3b82f6;border-radius:8px;font-weight:800;font-size:16px;color:#3b82f6;}
+  @media print{.cat-qty-grid{grid-template-columns:repeat(3,1fr);}}
   .footer{margin-top:32px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;padding-top:14px;}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 </style>
@@ -1495,9 +1501,7 @@ ${bodyHTML}
           </div>
           <div class="form-group"><label class="form-label">عملة المنتج (تُطبّق على سعر البيع والتكلفة)</label>
             <select class="form-select" id="prod-currency">
-              <option value="SYP">ليرة سورية (ل.س)</option>
-              <option value="USD" selected>دولار أمريكي ($)</option>
-              <option value="TRY">ليرة تركية (₺)</option>
+              ${_curOptions('USD')}
             </select>
             <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">إذا اخترت الدولار، يُحوَّل السعر تلقائياً للعملة الأساسية في الكاشير والتقارير حسب سعر الصرف.</div>
           </div>
@@ -1563,9 +1567,7 @@ ${bodyHTML}
             </div>
             <div class="form-group"><label class="form-label">عملة المنتج</label>
               <select class="form-select" id="edit-prod-currency">
-                <option value="SYP">ليرة سورية (ل.س)</option>
-                <option value="USD">دولار أمريكي ($)</option>
-                <option value="TRY">ليرة تركية (₺)</option>
+                ${_curOptions()}
               </select>
             </div>
           </div>
@@ -1655,15 +1657,21 @@ ${bodyHTML}
   const _INV_PAGE_SIZE = 15;
   let _invShownCount = _INV_PAGE_SIZE;
 
+  // Normalizes text for search matching: lowercases and strips all whitespace,
+  // so e.g. "not15" matches a product named "Redmi Note 15".
+  function _searchNorm(s) {
+    return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+  }
+
   function _getFilteredInvProducts() {
     const list = (window._products || []);
-    const q   = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
+    const q   = _searchNorm(document.getElementById('inv-search')?.value);
     const cat = document.getElementById('inv-cat-filter')?.value || 'all';
     return list.filter(p => {
-      const name  = (p.name || '').toLowerCase();
-      const sku   = (p.sku || '').toLowerCase();
+      const name  = _searchNorm(p.name);
+      const sku   = _searchNorm(p.sku);
       const pcat  = p.cat || p.category || '';
-      const pcatL = pcat.toLowerCase();
+      const pcatL = _searchNorm(pcat);
       const okText = window._invCatMode
         ? (!q || pcatL.includes(q))
         : (!q || name.includes(q) || sku.includes(q) || pcatL.includes(q));
@@ -2022,9 +2030,11 @@ ${bodyHTML}
 
   function _curOptions(sel) {
     const cur = sel || (window.Currency ? window.Currency.base : 'SYP');
-    return `<option value="SYP" ${cur==='SYP'?'selected':''}>ليرة سورية (ل.س)</option>
-            <option value="USD" ${cur==='USD'?'selected':''}>دولار ($)</option>
-            <option value="TRY" ${cur==='TRY'?'selected':''}>ليرة تركية (₺)</option>`;
+    const labels = { SYP: 'ليرة سورية (ل.س)', USD: 'دولار ($)', TRY: 'ليرة تركية (₺)' };
+    const visible = window.Currency ? window.Currency.visibleCodes() : Object.keys(labels);
+    // احرص دائماً على تضمين العملة المختارة حالياً حتى لو أصبحت مخفية لاحقاً (بيانات قديمة)
+    const codes = visible.includes(cur) ? visible : [...visible, cur].filter(Boolean);
+    return codes.map(code => `<option value="${code}" ${cur===code?'selected':''}>${labels[code] || code}</option>`).join('\n            ');
   }
 
   // CASH BOX (الصندوق)
@@ -3668,7 +3678,8 @@ ${bodyHTML}
     { code:'TRY', icon:'🇹🇷', label:'تركية',  sym:'₺'   },
   ];
   function _cashierCurCardsHTML(selected) {
-    return CASHIER_CUR_OPTIONS.map(c => {
+    const visible = window.Currency ? window.Currency.visibleCodes() : CASHIER_CUR_OPTIONS.map(c=>c.code);
+    return CASHIER_CUR_OPTIONS.filter(c => visible.includes(c.code)).map(c => {
       const isSel = selected === c.code;
       return `
       <div class="card card-hover" data-cur="${c.code}" onclick="pickCashierCurrency('${c.code}')"
@@ -3691,8 +3702,93 @@ ${bodyHTML}
     if (typeof window.toggleCashierTryRate === 'function') window.toggleCashierTryRate(code);
   };
 
+  const CURRENCY_TAB_META = {
+    SYP: { icon:'🇸🇾', name:'ليرة سورية' },
+    USD: { icon:'💵', name:'دولار أمريكي' },
+    TRY: { icon:'🇹🇷', name:'ليرة تركية' },
+  };
+  function _currencyTabCardsHTML() {
+    const C = window.Currency;
+    return Object.keys(CURRENCY_TAB_META).map(code => {
+      const meta = CURRENCY_TAB_META[code];
+      const isHidden = C ? C.isHidden(code) : false;
+      let rateField = '';
+      if (code === 'USD') {
+        rateField = `<div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:8px;">عملة مرجعية أساسية (1 دولار)</div>`;
+      } else if (code === 'SYP') {
+        const val = C ? C.rate : '';
+        rateField = `<div style="margin-top:8px;"><label class="form-label" style="font-size:var(--text-xs);">سعر الصرف: 1 دولار = ؟ ل.س</label>
+          <div style="display:flex;gap:6px;">
+            <input type="number" class="form-input" id="s-cur-rate-SYP" min="0" step="any" value="${val||''}" style="flex:1;" placeholder="مثال: 15000" />
+            <button type="button" class="btn btn-secondary btn-sm" onclick="fetchCurTabRate('SYP')">🔄</button>
+          </div>
+        </div>`;
+      } else if (code === 'TRY') {
+        const val = C ? C.usdToTry : '';
+        rateField = `<div style="margin-top:8px;"><label class="form-label" style="font-size:var(--text-xs);">سعر الصرف: 1 دولار = ؟ ₺</label>
+          <div style="display:flex;gap:6px;">
+            <input type="number" class="form-input" id="s-cur-rate-TRY" min="0" step="any" value="${val||''}" style="flex:1;" placeholder="مثال: 32" />
+            <button type="button" class="btn btn-secondary btn-sm" onclick="fetchCurTabRate('TRY')">🔄</button>
+          </div>
+        </div>`;
+      }
+      return `
+      <div class="card" style="padding:var(--sp-4);border:2px solid ${isHidden?'var(--border)':'var(--primary)'};opacity:${isHidden?'.55':'1'};">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1.6rem;">${meta.icon}</span>
+            <span style="font-weight:700;">${meta.name}</span>
+          </div>
+          <button type="button" class="btn ${isHidden?'btn-secondary':'btn-primary'} btn-sm" onclick="toggleCurrencyHidden('${code}')">
+            ${isHidden ? '🙈 مخفية — إظهار' : '👁️ ظاهرة — إخفاء'}
+          </button>
+        </div>
+        ${rateField}
+      </div>`;
+    }).join('');
+  }
+  window.toggleCurrencyHidden = function(code) {
+    if (!window.Currency) return;
+    const currentlyHidden = window.Currency.isHidden(code);
+    const ok = window.Currency.setHidden(code, !currentlyHidden);
+    if (!ok) { showToast('error', 'لا يمكن إخفاء كل العملات — يجب أن تبقى عملة واحدة ظاهرة على الأقل'); return; }
+    const grid = document.getElementById('currencies-tab-grid');
+    if (grid) grid.innerHTML = _currencyTabCardsHTML();
+    const baseSel = document.getElementById('s-cur-base');
+    if (baseSel) baseSel.innerHTML = _curOptions(window.Currency.base);
+    showToast('success', currentlyHidden ? `تم إظهار ${CURRENCY_TAB_META[code].name} ✓` : `تم إخفاء ${CURRENCY_TAB_META[code].name} ✓`);
+  };
+  window.fetchCurTabRate = async function(code) {
+    if (!window.Currency) return;
+    showToast('info', 'جاري جلب سعر الصرف...');
+    let val = null;
+    if (code === 'SYP') val = await window.Currency.fetchAuto();
+    if (code === 'TRY') val = await window.Currency.fetchAutoTry();
+    if (val) {
+      const el = document.getElementById('s-cur-rate-' + code);
+      if (el) el.value = val;
+      showToast('success', 'تم جلب سعر الصرف ✓');
+    } else {
+      showToast('error', 'تعذر جلب سعر الصرف، أدخله يدوياً');
+    }
+  };
+  window.saveCurrenciesTabSettings = function() {
+    if (!window.Currency) return;
+    const C = window.Currency;
+    const base    = document.getElementById('s-cur-base')?.value;
+    const sypRate = parseFloat(document.getElementById('s-cur-rate-SYP')?.value);
+    const tryRate = parseFloat(document.getElementById('s-cur-rate-TRY')?.value);
+    if (sypRate && sypRate > 0) C.setRate(sypRate);
+    if (tryRate && tryRate > 0) C.setUsdToTry(tryRate);
+    if (base) C.setBase(base);
+    if (typeof updateCurrencyLabel === 'function') updateCurrencyLabel();
+    showToast('success', 'تم حفظ إعدادات العملات ✓');
+    const hash = window.location.hash.replace('#','') || 'settings';
+    if (typeof window.navigate === 'function') window.navigate(hash);
+  };
+
   async function renderSettings() {
-    const sections = ['معلومات الشركة','الإعدادات المالية','قوالب الطباعة','النسخ الاحتياطي','الأمان والجلسة','المظهر 🎨'];
+    const sections = ['معلومات الشركة','الإعدادات المالية','العملات والصرف','قوالب الطباعة','النسخ الاحتياطي','الأمان والجلسة','المظهر 🎨'];
     const _s = window._appSettings || {};
     const _companyName    = _s.companyName    || '';
     const _regNo          = _s.regNo          || '';
@@ -3702,7 +3798,7 @@ ${bodyHTML}
     const _minStockAlert  = _s.minStockAlert  != null ? _s.minStockAlert  : 5;
     const _posDiscount    = _s.posDiscount    != null ? _s.posDiscount    : 0;
     const _invoiceNote    = _s.invoiceNote    || 'شكراً لتعاملكم معنا. البضاعة المباعة لا تُرد إلا خلال 7 أيام من تاريخ الشراء.';
-    const _cashierCur     = _s.cashierCurrency || 'SYP';
+    const _cashierCur     = (window.Currency && window.Currency.isHidden(_s.cashierCurrency)) ? window.Currency.base : (_s.cashierCurrency || 'SYP');
     const _sessionTimeout = parseInt(_s.sessionTimeout) || 0;
     const hasPinSet       = !!localStorage.getItem('a3mali_pin_' + _acctKey());
     const _lastBackupTs   = _s._lastBackupAt ? new Date(_s._lastBackupAt).toLocaleString('en-US') : 'لم يتم بعد';
@@ -3792,6 +3888,27 @@ ${bodyHTML}
             </div>
             <div class="card-footer" style="display:flex;justify-content:flex-end;">
               <button class="btn btn-primary" onclick="saveFinancialSettings()">حفظ الإعدادات المالية</button>
+            </div>
+          </div>
+
+          <!-- Panel: Currencies & Exchange -->
+          <div id="spanel-cur" class="card" style="display:none;">
+            <div class="card-header"><h3 style="font-weight:700;">العملات والصرف 💱</h3></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:var(--sp-5);">
+              <div class="form-group" style="max-width:320px;">
+                <label class="form-label">العملة الأساسية للنظام</label>
+                <select class="form-select" id="s-cur-base">
+                  ${_curOptions(window.Currency ? window.Currency.base : 'SYP')}
+                </select>
+                <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">تُستخدم لعرض التقارير والمبالغ الإجمالية في النظام</div>
+              </div>
+              <div id="currencies-tab-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-4);">
+                ${_currencyTabCardsHTML()}
+              </div>
+              <div style="font-size:var(--text-xs);color:var(--text-muted);">👁️ / 🙈 إخفاء عملة يزيلها من كل قوائم اختيار العملة في النظام (المخزون، الكاشير، الصندوق، المصاريف، الديون، المشتريات...) — أسعار المنتجات القديمة بهذه العملة تبقى تُحسب بشكل صحيح.</div>
+            </div>
+            <div class="card-footer" style="display:flex;justify-content:flex-end;">
+              <button class="btn btn-primary" onclick="saveCurrenciesTabSettings()">حفظ إعدادات العملات</button>
             </div>
           </div>
 
@@ -5200,7 +5317,11 @@ ${bodyHTML}
     const catEl = document.getElementById('prod-cat');       if (catEl) catEl.value = 'عام';
     const catSearchEl = document.getElementById('prod-cat-search'); if (catSearchEl) catSearchEl.value = 'عام';
     const supEl = document.getElementById('prod-supplier'); if (supEl) supEl.value = '';
-    const curEl = document.getElementById('prod-currency'); if (curEl) curEl.value = 'SYP';
+    const curEl = document.getElementById('prod-currency');
+    if (curEl) {
+      const defCur = window.Currency ? window.Currency.base : 'SYP';
+      curEl.innerHTML = _curOptions(defCur);
+    }
     const emEl  = document.getElementById('prod-emoji'); if (emEl) emEl.value = '📦';
     const emDsp = document.getElementById('prod-emoji-display'); if (emDsp) emDsp.textContent = '📦';
     refreshInvKpis();
@@ -5502,7 +5623,8 @@ ${bodyHTML}
     set('edit-prod-id', p.id);
     set('edit-prod-name', p.name || '');
     set('edit-prod-sku', p.sku || '');
-    set('edit-prod-currency', p.currency || 'SYP');
+    const editCurEl = document.getElementById('edit-prod-currency');
+    if (editCurEl) editCurEl.innerHTML = _curOptions(p.currency || 'SYP');
     set('edit-prod-price', Number(p.price) || 0);
     set('edit-prod-cost', Number(p.cost) || 0);
     set('edit-prod-desc', p.desc || '');
@@ -7228,24 +7350,6 @@ ${bodyHTML}
         headers: ['#','المنتج','الكمية المتاحة','سعر البيع','الحد الأدنى'],
         rows: []
       },
-      catQty: {
-        headers: ['#','الفئة','إجمالي الكمية'],
-        rows: (() => {
-          const defaults = ['عام'];
-          const custom = (window._categories||[]).map(c=>c.name);
-          const prodCats = (window._products||[]).map(p=>(p.cat||p.category||'').trim()).filter(Boolean);
-          const allCats = Array.from(new Set([...defaults, ...custom, ...prodCats]));
-          let grandTotal = 0;
-          const rows = allCats.map((catName, idx) => {
-            const total = (window._products||[]).filter(p=>(p.cat||p.category)===catName)
-              .reduce((sum,p)=>sum+(Number(p.stock)||0), 0);
-            grandTotal += total;
-            return `<tr><td>${idx+1}</td><td style="font-weight:700;">${catName}</td><td>${total}</td></tr>`;
-          });
-          rows.push(`<tr class="total-final"><td></td><td>المجموع</td><td>${grandTotal}</td></tr>`);
-          return rows;
-        })()
-      },
       profit: {
         headers: ['البيان','المبلغ'],
         rows: [
@@ -7281,6 +7385,25 @@ ${bodyHTML}
            <td>${inv.date}</td><td style="font-weight:700;">${(inv.amount||0).toLocaleString('en-US')} ل.س</td></tr>`)
       }
     };
+
+    if (key === 'catQty') {
+      const defaults = ['عام'];
+      const custom = (window._categories||[]).map(c=>c.name);
+      const prodCats = (window._products||[]).map(p=>(p.cat||p.category||'').trim()).filter(Boolean);
+      const allCats = Array.from(new Set([...defaults, ...custom, ...prodCats]));
+      let grandTotal = 0;
+      const items = allCats.map(catName => {
+        const total = (window._products||[]).filter(p=>(p.cat||p.category)===catName)
+          .reduce((sum,p)=>sum+(Number(p.stock)||0), 0);
+        grandTotal += total;
+        return `<div class="cat-qty-item"><span class="cat-qty-name">${catName}</span><span class="cat-qty-val">${total}</span></div>`;
+      }).join('');
+      generatePDF(name, `
+        <div class="cat-qty-grid">${items}</div>
+        <div class="cat-qty-total"><span>المجموع</span><span>${grandTotal}</span></div>
+      `);
+      return;
+    }
 
     const data = reportData[key] || { headers:['البيان'], rows:[] };
     const tableBody = data.rows.length > 0
@@ -7473,7 +7596,7 @@ ${bodyHTML}
     const rateEl = document.getElementById('cur-rate');
     const metaEl = document.getElementById('cur-rate-meta');
     const tryEl  = document.getElementById('cur-try-rate');
-    if (baseEl) baseEl.value = C.base;
+    if (baseEl) baseEl.innerHTML = _curOptions(C.base);
     if (modeEl) modeEl.value = C.mode;
     if (rateEl) rateEl.value = C.rate || '';
     if (tryEl)  tryEl.value  = C.usdToTry || '';

@@ -17,7 +17,12 @@
       if (typeof window._saveSettings === 'function') window._saveSettings();
     },
 
-    get base()      { return this._s().baseCurrency || 'SYP'; },
+    get base()      {
+      const b = this._s().baseCurrency || 'SYP';
+      if (!this.isHidden(b)) return b;
+      const vis = this.visibleCodes();
+      return vis.length ? vis[0] : b;
+    },
     get mode()      { return this._s().rateMode || 'manual'; },
     get rate()      {
       const r = parseFloat(this._s().usdToSyp);
@@ -27,6 +32,36 @@
     get usdToTry()  {
       const r = parseFloat(this._s().usdToTry);
       return (r && r > 0) ? r : 0;
+    },
+
+    isHidden(code) {
+      const hidden = this._s().hiddenCurrencies || [];
+      return hidden.includes(code);
+    },
+    visibleCodes() {
+      const hidden = this._s().hiddenCurrencies || [];
+      return Object.keys(CURRENCIES).filter(c => !hidden.includes(c));
+    },
+    setHidden(code, hide) {
+      if (!CURRENCIES[code]) return false;
+      const s = this._s();
+      let hidden = Array.isArray(s.hiddenCurrencies) ? s.hiddenCurrencies.slice() : [];
+      const currentlyHidden = hidden.includes(code);
+      if (hide === currentlyHidden) return true;
+      if (hide) {
+        const remainingVisible = Object.keys(CURRENCIES).filter(c => c !== code && !hidden.includes(c));
+        if (remainingVisible.length === 0) return false; // لا يمكن إخفاء كل العملات
+        hidden.push(code);
+      } else {
+        hidden = hidden.filter(c => c !== code);
+      }
+      s.hiddenCurrencies = hidden;
+      // إذا كانت العملة الأساسية أو عملة الكاشير أصبحت مخفية، إعادة تعيينها لأول عملة ظاهرة
+      const vis = Object.keys(CURRENCIES).filter(c => !hidden.includes(c));
+      if (hide && s.baseCurrency === code && vis.length) s.baseCurrency = vis[0];
+      if (hide && s.cashierCurrency === code && vis.length) s.cashierCurrency = vis[0];
+      this._persist();
+      return true;
     },
 
     setBase(code) { if (CURRENCIES[code]) { this._s().baseCurrency = code; this._persist(); } },
