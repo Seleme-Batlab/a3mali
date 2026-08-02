@@ -336,7 +336,7 @@
             role:  'employee',
           }));
         }
-        window.location.href = 'dashboard.html';
+        window.location.href = 'index.html';
       }
     });
   }
@@ -419,7 +419,7 @@
       }
 
       showToast('success', 'تم تسجيل الدخول بنجاح! 🎉');
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 700);
+      setTimeout(() => { window.location.href = 'index.html'; }, 700);
 
     } catch (err) {
       showLoading(false);
@@ -581,7 +581,7 @@
       showToast('success', msg);
       // All Firestore writes done — safe to navigate now
       window._isRegistering = false;
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 900);
+      setTimeout(() => { window.location.href = 'index.html'; }, 900);
 
     } catch (err) {
       window._isRegistering = false;
@@ -625,7 +625,7 @@
       }
       showLoading(false);
       showToast('success', 'تم التحقق بنجاح 🎉');
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 700);
+      setTimeout(() => { window.location.href = 'index.html'; }, 700);
     } catch(err) {
       showLoading(false);
       document.getElementById('code-error').style.display = 'flex';

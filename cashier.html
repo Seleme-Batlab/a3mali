@@ -142,7 +142,7 @@
 
     <div class="pos-lock-chips" id="login-chips"></div>
 
-    <button type="button" class="pos-lock-back" onclick="window.location.href='dashboard.html'" style="background:none;border:none;cursor:pointer;">↩ رجوع للصفحة الرئيسية</button>
+    <button type="button" class="pos-lock-back" onclick="window.location.href='index.html'" style="background:none;border:none;cursor:pointer;">↩ رجوع للصفحة الرئيسية</button>
   </div>
 </div>
 
@@ -201,6 +201,11 @@
     <!-- LEFT: PRODUCTS -->
     <div class="products-panel">
       <div class="products-toolbar">
+        <button type="button" class="seq-sale-btn" id="seq-sale-btn" onclick="toggleSequentialSale()"
+          title="عند التفعيل: مسح باركود من 8 أرقام فأكثر يطابق منتجاً واحداً فقط يضيفه تلقائياً للسلة ويصفّر حقل البحث للمسح التالي">
+          <span id="seq-sale-icon">◻️</span>
+          <span>بيع متتالي (مسح باركود متتابع)</span>
+        </button>
         <div class="products-search">
           <div class="search-wrap">
             <input class="search-input" type="text" id="product-search"
@@ -360,11 +365,14 @@
   <!-- MOBILE CART BACKDROP (phones only) -->
   <div class="mobile-cart-backdrop" id="mobile-cart-backdrop" onclick="closeMobileCart()"></div>
 
-  <!-- MOBILE CART LAUNCHER BAR (phones only) -->
-  <div class="mobile-cart-bar" id="mobile-cart-bar" onclick="openMobileCart()">
-    <span class="mcb-count" id="mcb-count">0</span>
-    <span class="mcb-label">عرض السلة 🛒</span>
-    <span class="mcb-total" id="mcb-total">0</span>
+  <!-- MOBILE CART LAUNCHER DOCK (phones only) -->
+  <div class="mobile-cart-dock" id="mobile-cart-dock">
+    <div class="mobile-cart-bar" id="mobile-cart-bar" onclick="openMobileCart()">
+      <span class="mcb-count" id="mcb-count">0</span>
+      <span class="mcb-label">عرض السلة 🛒</span>
+      <span class="mcb-total" id="mcb-total">0</span>
+    </div>
+    <button class="cart-products-btn" id="cart-products-btn" onclick="openCartProductsModal()" aria-label="عرض منتجات السلة">📋</button>
   </div>
 </div>
 
@@ -411,6 +419,22 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('new-cust-modal')">إلغاء</button>
       <button class="btn btn-primary" onclick="saveQuickCustomer()">💾 حفظ واختيار</button>
+    </div>
+  </div>
+</div>
+
+<!-- CART PRODUCTS MODAL (quick view of selected items) -->
+<div class="modal-overlay" id="cart-products-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">منتجات السلة 🛒</h3>
+      <button class="modal-close" onclick="closeModal('cart-products-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div class="cart-items" id="cart-products-modal-items" style="min-height:120px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cart-products-modal')">إغلاق</button>
     </div>
   </div>
 </div>
@@ -616,7 +640,7 @@
 
   // Tracks the uid we last authenticated for, so a redundant onAuthStateChanged
   // fire for the SAME user (Firebase's cross-tab auth persistence can trigger
-  // this when another tab, e.g. dashboard.html, opens its own Auth instance)
+  // this when another tab, e.g. index.html, opens its own Auth instance)
   // does not reset the login screen or re-register duplicate live-sync listeners.
   let _lastAuthedUid = null;
 
@@ -846,6 +870,7 @@ let _svcCurrency = 'SYP';    // currency chosen in service modal
 let activeCategory = 'all';
 let posCashier = null;       // { name, username, role }
 let VAT = 0;                 // read from settings.vatRate
+let sequentialSale = localStorage.getItem('pos_sequential_sale') === '1';  // auto-add on unique 8+ digit barcode match
 
 const CAT_LABELS = {
   food:'مأكولات', drinks:'مشروبات', stationery:'قرطاسية',
@@ -1174,6 +1199,9 @@ function initPOS() {
 
   // Highlight the default payment currency button
   _initPayCurUI();
+
+  // Reflect saved "بيع متتالي" preference
+  _updateSeqSaleUI();
 }
 
 function normalizeProduct(p) {
@@ -1340,7 +1368,7 @@ function renderProducts() {
       <div class="empty-icon">📦</div>
       <div class="empty-title">لا توجد منتجات في النظام</div>
       <div class="empty-desc">أضِف منتجات من لوحة التحكم ← المخزون لتظهر هنا</div>
-      <a href="dashboard.html#inventory" class="btn btn-primary" style="margin-top:var(--sp-4);">+ إدارة المخزون</a>
+      <a href="index.html#inventory" class="btn btn-primary" style="margin-top:var(--sp-4);">+ إدارة المخزون</a>
     </div>`;
     return;
   }
@@ -1410,6 +1438,35 @@ function searchProducts(q) {
   });
   posShownCount = POS_PAGE_SIZE;
   renderProducts();
+
+  // بيع متتالي: باركود من 8 أرقام فأكثر ولقى منتجاً واحداً فقط ← يضاف تلقائياً
+  if (sequentialSale && /^\d{8,}$/.test(q) && filteredProducts.length === 1) {
+    const match = filteredProducts[0];
+    if (match.active && !(match.stock !== null && cartQty(match.id) >= match.stock)) {
+      addToCart(match.id);
+      const searchEl = document.getElementById('product-search');
+      if (searchEl) {
+        searchEl.value = '';
+        searchProducts('');
+        searchEl.focus();
+        searchEl.select();
+      }
+    }
+  }
+}
+
+function toggleSequentialSale() {
+  sequentialSale = !sequentialSale;
+  localStorage.setItem('pos_sequential_sale', sequentialSale ? '1' : '0');
+  _updateSeqSaleUI();
+}
+
+function _updateSeqSaleUI() {
+  const btn  = document.getElementById('seq-sale-btn');
+  const icon = document.getElementById('seq-sale-icon');
+  if (!btn) return;
+  btn.classList.toggle('active', sequentialSale);
+  if (icon) icon.textContent = sequentialSale ? '✅' : '◻️';
 }
 
 function filterCategory(cat, btn) {
@@ -1563,23 +1620,8 @@ async function _verifyStockLive() {
   }
 }
 
-function renderCart() {
-  const container = document.getElementById('cart-items');
-  const countEl   = document.getElementById('cart-count');
-  countEl.textContent = cart.reduce((s, i) => s + i.qty, 0);
-
-  if (!cart.length) {
-    container.innerHTML = `
-      <div class="cart-empty" id="cart-empty">
-        <div class="cart-empty-icon">🛒</div>
-        <div class="cart-empty-text">اضغط على منتج لإضافته</div>
-      </div>`;
-    document.getElementById('checkout-btn').disabled = true;
-    recalculate();
-    return;
-  }
-  document.getElementById('checkout-btn').disabled = false;
-  container.innerHTML = cart.map(item => {
+function cartItemsHTML(idPrefix = '') {
+  return cart.map(item => {
     const isSvc = item.type === 'service';
     // For services: show original-currency label if it differs from base
     const svcLabel = isSvc && item.serviceCurrency && item.servicePriceDisplay != null
@@ -1592,7 +1634,7 @@ function renderCart() {
         })()
       : '';
     return `
-    <div class="cart-item${isSvc ? ' is-service' : ''}" id="ci-${item.id}">
+    <div class="cart-item${isSvc ? ' is-service' : ''}" id="${idPrefix}ci-${item.id}">
       <span class="cart-item-emoji">${item.emoji || (isSvc ? '⚙️' : '📦')}</span>
       <div class="cart-item-info">
         <div class="cart-item-name">${isSvc ? `<span class="svc-badge">خدمة</span>` : ''}${item.name}</div>
@@ -1607,7 +1649,50 @@ function renderCart() {
       <span class="cart-item-remove" onclick="updateQty('${item.id}',-1)">✕</span>
     </div>`;
   }).join('');
+}
+
+function renderCart() {
+  const container = document.getElementById('cart-items');
+  const countEl   = document.getElementById('cart-count');
+  countEl.textContent = cart.reduce((s, i) => s + i.qty, 0);
+
+  if (!cart.length) {
+    container.innerHTML = `
+      <div class="cart-empty" id="cart-empty">
+        <div class="cart-empty-icon">🛒</div>
+        <div class="cart-empty-text">اضغط على منتج لإضافته</div>
+      </div>`;
+    document.getElementById('checkout-btn').disabled = true;
+    recalculate();
+    renderCartProductsModal();
+    return;
+  }
+  document.getElementById('checkout-btn').disabled = false;
+  container.innerHTML = cartItemsHTML();
   recalculate();
+  renderCartProductsModal();
+}
+
+// ============================================================
+//  CART PRODUCTS MODAL (quick popup view, useful on small phones)
+// ============================================================
+function renderCartProductsModal() {
+  const container = document.getElementById('cart-products-modal-items');
+  if (!container) return;
+  if (!cart.length) {
+    container.innerHTML = `
+      <div class="cart-empty">
+        <div class="cart-empty-icon">🛒</div>
+        <div class="cart-empty-text">السلة فارغة</div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = cartItemsHTML('m-');
+}
+
+function openCartProductsModal() {
+  renderCartProductsModal();
+  openModal('cart-products-modal');
 }
 
 // ============================================================
@@ -1930,6 +2015,8 @@ async function checkout() {
       date: now.getTime(),
       status: 'pending',
       notes: sale.notes || '',
+      type: 'they_owe',
+      items: cart.map(i => `${i.name} ×${i.qty}`).join('، '),
       createdAt: now.getTime(),
     });
     _saveAcct('debts', debts);
@@ -2203,7 +2290,7 @@ function saveQuickCustomer() {
   const name  = document.getElementById('nc-name').value.trim();
   const phone = document.getElementById('nc-phone').value.trim();
   if (!name || !phone) { showToast('warning', 'أدخل الاسم ورقم الهاتف'); return; }
-  const cust = { name, phone, email:'', company:'', city:'', type:'عميل عادي', notes:'', date:new Date().toLocaleDateString('ar-SY') };
+  const cust = { id:'CUST-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name, phone, email:'', company:'', city:'', type:'عميل عادي', notes:'', date:new Date().toLocaleDateString('ar-SY') };
   customers.push(cust);
   _saveAcct('customers', customers);
   _fsSync('customers', customers);

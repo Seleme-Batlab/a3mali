@@ -7,7 +7,7 @@ User-agent: *
 
 # --- السماح بالصفحات العامة القابلة للأرشفة ---
 Allow: /$
-Allow: /index.html
+Allow: /about.html
 Allow: /login.html
 Allow: /privacy.html
 Allow: /terms.html
@@ -18,7 +18,7 @@ Allow: /js/
 Allow: /assets/
 
 # --- منع صفحات النظام الداخلية المحمية (حماية بيانات العملاء) ---
-Disallow: /dashboard.html
+Disallow: /index.html
 Disallow: /cashier.html
 
 # --- منع صفحة الخطأ من الأرشفة ---
