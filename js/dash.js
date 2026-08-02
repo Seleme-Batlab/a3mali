@@ -666,10 +666,11 @@ ${bodyHTML}
       const type = c.type || 'عميل عادي';
       const typeBadge = type === 'VIP' ? 'badge-warning' : (type === 'شركة' ? 'badge-info' : 'badge-success');
       const safeName = String(c.name || '').replace(/'/g, "\\'");
+      const archiveKey = String(c.id || c.name || '').replace(/'/g, "\\'");
       return `
       <tr data-cust="${`${c.name||''} ${c.phone||''} ${c.email||''} ${c.company||''}`.toLowerCase()}" data-cust-type="${type}" data-cust-date="${c.date||''}" data-ts="${window._dateToTs(c.date || c.createdAt)}">
         <td>${i + 1}</td>
-        <td style="font-weight:700;">${c.name || '—'}</td>
+        <td style="font-weight:700;"><a href="javascript:void(0)" onclick="openCustomerArchive('${archiveKey}')" style="color:var(--primary);text-decoration:underline;cursor:pointer;">${c.name || '—'}</a></td>
         <td>${c.phone || '—'}</td>
         <td>${c.email || '—'}</td>
         <td style="font-weight:700;">${_fmt(Number(c.totalPurchases) || 0, base)}</td>
@@ -2300,52 +2301,84 @@ ${bodyHTML}
   // DEBTS (الديون)
   function _creditDebtUnpaid() {
     const base = window.Currency ? window.Currency.base : 'SYP';
-    return (window._debts || []).reduce((s, d) => {
+    return (window._debts || []).filter(d => d.type !== 'we_owe').reduce((s, d) => {
       const unpaid = Math.max(0, (d.amount || 0) - (d.paid || 0));
       const v = window.Currency ? window.Currency.convert(unpaid, d.currency || 'SYP', base) : unpaid;
       return s + v;
     }, 0);
   }
 
-  async function renderDebt() {
-    const debts = (window._debts || []);
-    const base  = window.Currency ? window.Currency.base : 'SYP';
-    const totalAmt  = _sumBase(debts);
-    const totalPaid = _sumBase(debts.map(d => ({ amount: d.paid || 0, currency: d.currency || 'SYP' })));
-    const totalRem  = Math.max(0, totalAmt - totalPaid);
-    const countPend = debts.filter(d => d.status !== 'paid').length;
+  // يجمع كل الديون حسب العميل (customerId || customerName) لعرض صف واحد لكل عميل
+  // بالجدول الرئيسي، مع الاحتفاظ بكل السجلات (records) مرتبة الأحدث أولاً لعرضها بالأرشيف.
+  function _groupDebtsByCustomer() {
+    const base = window.Currency ? window.Currency.base : 'SYP';
+    const groups = {};
+    (window._debts || []).forEach(d => {
+      const key = d.customerId || d.customerName || '—';
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          customerName: d.customerName || '—',
+          customerId: d.customerId || '',
+          records: [],
+          theyOweRem: 0,
+          weOweRem: 0,
+          totalPaid: 0,
+          lastDate: 0,
+          pending: false,
+        };
+      }
+      const g = groups[key];
+      g.records.push(d);
+      const rem = Math.max(0, (d.amount || 0) - (d.paid || 0));
+      const remBase  = window.Currency ? window.Currency.convert(rem, d.currency || 'SYP', base) : rem;
+      const paidBase = window.Currency ? window.Currency.convert(d.paid || 0, d.currency || 'SYP', base) : (d.paid || 0);
+      if (d.type === 'we_owe') g.weOweRem += remBase; else g.theyOweRem += remBase;
+      g.totalPaid += paidBase;
+      const ts = window._dateToTs(d.date || d.createdAt);
+      if (ts > g.lastDate) g.lastDate = ts;
+      if (d.status !== 'paid') g.pending = true;
+    });
+    const list = Object.values(groups);
+    list.forEach(g => {
+      g.records.sort((a, b) => window._dateToTs(b.date || b.createdAt) - window._dateToTs(a.date || a.createdAt));
+      g.net = g.theyOweRem - g.weOweRem;
+    });
+    list.sort((a, b) => b.lastDate - a.lastDate);
+    return list;
+  }
 
-    const rows = debts.length === 0
-      ? `<tr><td colspan="8"><div class="empty-state" style="padding:var(--sp-10);">
+  function _escJs(s) { return String(s == null ? '' : s).replace(/'/g, "\\'"); }
+
+  async function renderDebt() {
+    const groups = _groupDebtsByCustomer();
+    const base   = window.Currency ? window.Currency.base : 'SYP';
+    const theyOweTotal = groups.reduce((s, g) => s + g.theyOweRem, 0);
+    const weOweTotal   = groups.reduce((s, g) => s + g.weOweRem, 0);
+    const totalPaid    = groups.reduce((s, g) => s + g.totalPaid, 0);
+    const countPend    = groups.filter(g => g.pending).length;
+
+    const rows = groups.length === 0
+      ? `<tr><td colspan="7"><div class="empty-state" style="padding:var(--sp-10);">
           <div class="empty-icon">📋</div>
           <div class="empty-title">لا توجد ديون مسجّلة</div>
           <div class="empty-desc">ستظهر هنا ديون البيع الآجل</div>
         </div></td></tr>`
-      : debts.map(d => {
-          const rem  = Math.max(0, (d.amount||0) - (d.paid||0));
-          const pct  = d.amount > 0 ? Math.round(((d.paid||0)/d.amount)*100) : 0;
-          const sMap = { paid:'badge-success', partial:'badge-warning', pending:'badge-danger' };
-          const sLbl = { paid:'مسدّد', partial:'جزئي', pending:'معلق' };
-          const st   = d.status || 'pending';
-          return `<tr data-ts="${window._dateToTs(d.date || d.createdAt)}">
-            <td style="font-weight:700;">${d.customerName||'—'}</td>
-            <td>${_fmt(d.amount||0, d.currency||base)}</td>
-            <td style="color:var(--success);">${_fmt(d.paid||0, d.currency||base)}</td>
-            <td style="color:var(--danger);font-weight:700;">${_fmt(rem, d.currency||base)}</td>
-            <td>
-              <div style="display:flex;align-items:center;gap:var(--sp-2);">
-                <div style="flex:1;height:6px;background:var(--border);border-radius:4px;overflow:hidden;min-width:60px;">
-                  <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:4px;transition:width .3s;"></div>
-                </div>
-                <span style="font-size:var(--text-xs);color:var(--text-muted);">${pct}%</span>
-              </div>
-            </td>
-            <td><span class="badge ${sMap[st]||'badge-draft'}">${sLbl[st]||st}</span></td>
-            <td style="font-size:var(--text-xs);color:var(--text-muted);">${d.date ? new Date(d.date).toLocaleDateString('ar-SY') : '—'}</td>
+      : groups.map(g => {
+          const netLabel = g.net > 0 ? `لنا عليه: ${_fmt(g.net, base)}`
+                         : g.net < 0 ? `له علينا: ${_fmt(-g.net, base)}`
+                         : 'مسدد بالكامل';
+          const netColor = g.net > 0 ? 'var(--danger)' : g.net < 0 ? 'var(--warning)' : 'var(--success)';
+          const escKey = _escJs(g.key);
+          return `<tr data-ts="${g.lastDate}">
+            <td style="font-weight:700;"><a href="javascript:void(0)" onclick="openCustomerArchive('${escKey}')" style="color:var(--primary);text-decoration:underline;cursor:pointer;">${g.customerName}</a></td>
+            <td style="color:${netColor};font-weight:700;">${netLabel}</td>
+            <td style="color:var(--success);">${_fmt(g.totalPaid, base)}</td>
+            <td>${g.records.length}</td>
+            <td style="font-size:var(--text-xs);color:var(--text-muted);">${g.lastDate ? new Date(g.lastDate).toLocaleDateString('ar-SY') : '—'}</td>
+            <td><span class="badge ${g.pending ? 'badge-danger' : 'badge-success'}">${g.pending ? 'مستحق' : 'مسدد'}</span></td>
             <td><div class="table-actions">
-              ${st !== 'paid' ? `<button class="btn btn-ghost btn-sm" onclick="openDebtPayment('${d.id}')" title="تسجيل دفعة">💵</button>` : ''}
-              <button class="btn btn-ghost btn-sm" onclick="editDebt('${d.id}')" title="تعديل">✏️</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="deleteDebt('${d.id}')" title="حذف">🗑️</button>
+              <button class="btn btn-ghost btn-sm" onclick="openCustomerArchive('${escKey}')" title="فتح الأرشيف">📂</button>
             </div></td>
           </tr>`;
         }).join('');
@@ -2357,14 +2390,14 @@ ${bodyHTML}
           <h1 class="module-title">سجل الديون 💳</h1>
           <p class="module-subtitle">البيع الآجل — تسجيل الدفعات والتسديد الكامل</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddDebtModal()">+ إضافة دين</button>
+        <button class="btn btn-primary" onclick="window._activeArchiveKey=null;openAddDebtModal()">+ إضافة دين</button>
       </div>
 
       <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
-        <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">💳</div><div class="kpi-info"><div class="kpi-label">إجمالي الديون</div><div class="kpi-value">${_fmt(totalAmt, base)}</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-red">📤</div><div class="kpi-info"><div class="kpi-label">لنا عليه (مستحق)</div><div class="kpi-value">${_fmt(theyOweTotal, base)}</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">📥</div><div class="kpi-info"><div class="kpi-label">له علينا (مستحق)</div><div class="kpi-value">${_fmt(weOweTotal, base)}</div></div></div>
         <div class="kpi-card"><div class="kpi-icon kpi-icon-green">✅</div><div class="kpi-info"><div class="kpi-label">إجمالي المسدّد</div><div class="kpi-value">${_fmt(totalPaid, base)}</div></div></div>
-        <div class="kpi-card"><div class="kpi-icon kpi-icon-red">⏳</div><div class="kpi-info"><div class="kpi-label">المتبقي</div><div class="kpi-value">${_fmt(totalRem, base)}</div></div></div>
-        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">📋</div><div class="kpi-info"><div class="kpi-label">ديون معلقة</div><div class="kpi-value">${countPend}</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">👥</div><div class="kpi-info"><div class="kpi-label">عملاء لديهم مستحقات</div><div class="kpi-value">${countPend}</div></div></div>
       </div>
 
       <div class="module-toolbar">
@@ -2377,7 +2410,7 @@ ${bodyHTML}
 
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>العميل</th><th>المبلغ الإجمالي</th><th>المسدّد</th><th>المتبقي</th><th>التقدم</th><th>الحالة</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>العميل</th><th>الرصيد</th><th>المسدّد الكلي</th><th>عدد العمليات</th><th>آخر عملية</th><th>الحالة</th><th>إجراءات</th></tr></thead>
           <tbody id="debts-tbody">${rows}</tbody>
         </table>
       </div>
@@ -2388,13 +2421,19 @@ ${bodyHTML}
       <div class="modal" style="max-width:480px;">
         <div class="modal-header">
           <h3 class="modal-title" id="debt-modal-title">إضافة دين جديد</h3>
-          <button class="modal-close" onclick="closeModal('debt-modal')">✕</button>
+          <button class="modal-close" onclick="cancelDebtModal()">✕</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:var(--sp-4);">
           <input type="hidden" id="debt-edit-id" />
           <div class="form-group"><label class="form-label">العميل <span style="color:var(--danger);">*</span></label>
             <input type="text" class="form-input" id="debt-customer" list="debt-cust-list" placeholder="اسم العميل" />
             <datalist id="debt-cust-list">${(window._customers||[]).map(c=>`<option value="${c.name}">`).join('')}</datalist>
+          </div>
+          <div class="form-group"><label class="form-label">اتجاه الدين</label>
+            <select class="form-select" id="debt-type">
+              <option value="they_owe">لنا عليه (العميل مدين للمحل)</option>
+              <option value="we_owe">له علينا (المحل مدين للعميل)</option>
+            </select>
           </div>
           <div class="form-row">
             <div class="form-group"><label class="form-label">المبلغ الإجمالي <span style="color:var(--danger);">*</span></label>
@@ -2412,7 +2451,7 @@ ${bodyHTML}
             <textarea class="form-input form-textarea" id="debt-notes" style="height:70px;" placeholder="سبب الدين أو تفاصيل إضافية..."></textarea></div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('debt-modal')">إلغاء</button>
+          <button class="btn btn-secondary" onclick="cancelDebtModal()">إلغاء</button>
           <button class="btn btn-primary" onclick="saveDebt()">حفظ</button>
         </div>
       </div>
@@ -2423,7 +2462,7 @@ ${bodyHTML}
       <div class="modal" style="max-width:420px;">
         <div class="modal-header">
           <h3 class="modal-title">تسجيل دفعة</h3>
-          <button class="modal-close" onclick="closeModal('debt-payment-modal')">✕</button>
+          <button class="modal-close" onclick="cancelDebtPaymentModal()">✕</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:var(--sp-4);">
           <input type="hidden" id="dp-debt-id" />
@@ -2435,7 +2474,7 @@ ${bodyHTML}
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('debt-payment-modal')">إلغاء</button>
+          <button class="btn btn-secondary" onclick="cancelDebtPaymentModal()">إلغاء</button>
           <button class="btn btn-primary" onclick="confirmDebtPayment()">تسجيل الدفعة</button>
         </div>
       </div>
@@ -2463,6 +2502,7 @@ ${bodyHTML}
     document.getElementById('debt-modal-title').textContent = 'إضافة دين جديد';
     document.getElementById('debt-edit-id').value = '';
     document.getElementById('debt-customer').value = '';
+    document.getElementById('debt-type').value = 'they_owe';
     document.getElementById('debt-amount').value = '';
     document.getElementById('debt-paid-init').value = '0';
     document.getElementById('debt-date').value = new Date().toISOString().split('T')[0];
@@ -2476,6 +2516,7 @@ ${bodyHTML}
     document.getElementById('debt-modal-title').textContent = 'تعديل الدين';
     document.getElementById('debt-edit-id').value    = d.id;
     document.getElementById('debt-customer').value   = d.customerName || '';
+    document.getElementById('debt-type').value       = d.type || 'they_owe';
     document.getElementById('debt-amount').value     = d.amount || 0;
     document.getElementById('debt-paid-init').value  = d.paid || 0;
     document.getElementById('debt-date').value       = d.date ? new Date(d.date).toISOString().split('T')[0] : '';
@@ -2485,9 +2526,20 @@ ${bodyHTML}
     openModal('debt-modal');
   };
 
+  window.cancelDebtModal = function() {
+    closeModal('debt-modal');
+    if (window._activeArchiveKey) openCustomerArchive(window._activeArchiveKey);
+  };
+
+  window.cancelDebtPaymentModal = function() {
+    closeModal('debt-payment-modal');
+    if (window._activeArchiveKey) openCustomerArchive(window._activeArchiveKey);
+  };
+
   window.saveDebt = function() {
     const id       = document.getElementById('debt-edit-id')?.value.trim();
     const customer = (document.getElementById('debt-customer')?.value || '').trim();
+    const type     = document.getElementById('debt-type')?.value || 'they_owe';
     const amount   = parseFloat(document.getElementById('debt-amount')?.value) || 0;
     const paidInit = Math.min(amount, parseFloat(document.getElementById('debt-paid-init')?.value) || 0);
     const currency = document.getElementById('debt-currency')?.value || 'SYP';
@@ -2499,15 +2551,17 @@ ${bodyHTML}
 
     const status = paidInit >= amount ? 'paid' : paidInit > 0 ? 'partial' : 'pending';
     const debts = window._debts || [];
+    const matchCust = (window._customers || []).find(c => c.name === customer);
+    const customerId = matchCust ? (matchCust.id || '') : '';
 
     if (id) {
       const idx = debts.findIndex(d => d.id === id);
-      if (idx >= 0) debts[idx] = { ...debts[idx], customerName: customer, amount, paid: paidInit, currency, notes, status,
+      if (idx >= 0) debts[idx] = { ...debts[idx], customerName: customer, customerId, type, amount, paid: paidInit, currency, notes, status,
                                     date: dateVal ? new Date(dateVal).getTime() : debts[idx].date };
     } else {
       debts.unshift({
         id: 'DEBT-' + Date.now().toString().slice(-8),
-        customerName: customer, amount, paid: paidInit, currency,
+        customerName: customer, customerId, type, amount, paid: paidInit, currency,
         date: dateVal ? new Date(dateVal).getTime() : Date.now(),
         notes, status, createdAt: Date.now(),
       });
@@ -2516,6 +2570,7 @@ ${bodyHTML}
     window._saveData();
     closeModal('debt-modal');
     navigate('debts');
+    if (window._activeArchiveKey) openCustomerArchive(window._activeArchiveKey);
     showToast('success', 'تم حفظ الدين ✓');
   };
 
@@ -2524,6 +2579,7 @@ ${bodyHTML}
     window._debts = (window._debts || []).filter(d => d.id !== id);
     window._saveData();
     navigate('debts');
+    if (window._activeArchiveKey) openCustomerArchive(window._activeArchiveKey);
     showToast('success', 'تم حذف الدين ✓');
   };
 
@@ -2566,7 +2622,108 @@ ${bodyHTML}
     window._saveData();
     closeModal('debt-payment-modal');
     navigate('debts');
+    if (window._activeArchiveKey) openCustomerArchive(window._activeArchiveKey);
     showToast('success', `تم تسجيل الدفعة ${_fmt(pay, d.currency||'SYP')} ✓`);
+  };
+
+  // ============================================================
+  //  CUSTOMER DEBT ARCHIVE (أرشيف ديون العميل)
+  // ============================================================
+  function renderCustomerArchiveBody(key) {
+    const groups = _groupDebtsByCustomer();
+    const g = groups.find(x => x.key === key);
+    const base = window.Currency ? window.Currency.base : 'SYP';
+    if (!g) {
+      return `<div class="empty-state" style="padding:var(--sp-10);">
+        <div class="empty-icon">📂</div>
+        <div class="empty-title">لا توجد سجلات لهذا العميل</div>
+      </div>`;
+    }
+
+    const netLabel = g.net > 0 ? `لنا عليه: ${_fmt(g.net, base)}`
+                   : g.net < 0 ? `له علينا: ${_fmt(-g.net, base)}`
+                   : 'مسدد بالكامل';
+    const netColor = g.net > 0 ? 'var(--danger)' : g.net < 0 ? 'var(--warning)' : 'var(--success)';
+
+    const sMap = { paid:'badge-success', partial:'badge-warning', pending:'badge-danger' };
+    const sLbl = { paid:'مسدّد', partial:'جزئي', pending:'معلق' };
+
+    const recordsHtml = g.records.map(d => {
+      const rem = Math.max(0, (d.amount||0) - (d.paid||0));
+      const st  = d.status || 'pending';
+      const typeLbl   = d.type === 'we_owe' ? 'له علينا' : 'لنا عليه';
+      const typeBadge = d.type === 'we_owe' ? 'badge-info' : 'badge-draft';
+      return `
+        <div style="border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp-4);margin-bottom:var(--sp-3);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-2);flex-wrap:wrap;">
+            <div>
+              <span class="badge ${typeBadge}">${typeLbl}</span>
+              <span class="badge ${sMap[st]||'badge-draft'}" style="margin-inline-start:var(--sp-2);">${sLbl[st]||st}</span>
+              <span style="font-size:var(--text-xs);color:var(--text-muted);margin-inline-start:var(--sp-2);">${d.date ? new Date(d.date).toLocaleDateString('ar-SY') : '—'}</span>
+            </div>
+            <div class="table-actions">
+              ${st !== 'paid' ? `<button class="btn btn-ghost btn-sm" onclick="archiveDebtPayment('${d.id}')" title="تسجيل دفعة">💵</button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="archiveEditDebt('${d.id}')" title="تعديل">✏️</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="archiveDeleteDebt('${d.id}')" title="حذف">🗑️</button>
+            </div>
+          </div>
+          ${d.items ? `<div style="font-size:var(--text-sm);color:var(--text-muted);margin-top:var(--sp-2);">📦 ${d.items}</div>` : ''}
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);margin-top:var(--sp-3);font-size:var(--text-sm);">
+            <div>المبلغ: <strong>${_fmt(d.amount||0, d.currency||base)}</strong></div>
+            <div style="color:var(--success);">المسدّد: <strong>${_fmt(d.paid||0, d.currency||base)}</strong></div>
+            <div style="color:var(--danger);">المتبقي: <strong>${_fmt(rem, d.currency||base)}</strong></div>
+          </div>
+          ${d.notes ? `<div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--sp-2);">📝 ${d.notes}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:var(--sp-4);">
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-blue">💰</div><div class="kpi-info"><div class="kpi-label">الرصيد الحالي</div><div class="kpi-value" style="color:${netColor};font-size:var(--text-base);">${netLabel}</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-green">✅</div><div class="kpi-info"><div class="kpi-label">إجمالي المسدّد</div><div class="kpi-value">${_fmt(g.totalPaid, base)}</div></div></div>
+        <div class="kpi-card"><div class="kpi-icon kpi-icon-amber">📋</div><div class="kpi-info"><div class="kpi-label">عدد العمليات</div><div class="kpi-value">${g.records.length}</div></div></div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-bottom:var(--sp-4);" onclick="openAddDebtForCustomer('${_escJs(key)}')">+ إضافة دين لهذا العميل</button>
+      <div>${recordsHtml}</div>
+    `;
+  }
+
+  window.openCustomerArchive = function(key) {
+    window._activeArchiveKey = key;
+    const groups = _groupDebtsByCustomer();
+    const g = groups.find(x => x.key === key);
+    const titleEl = document.getElementById('archive-modal-title');
+    if (titleEl) titleEl.textContent = 'أرشيف العميل: ' + (g ? g.customerName : key);
+    const body = document.getElementById('customer-archive-body');
+    if (body) body.innerHTML = renderCustomerArchiveBody(key);
+    openModal('customer-archive-modal');
+  };
+
+  window.closeCustomerArchive = function() {
+    closeModal('customer-archive-modal');
+    window._activeArchiveKey = null;
+  };
+
+  window.openAddDebtForCustomer = function(key) {
+    const groups = _groupDebtsByCustomer();
+    const g = groups.find(x => x.key === key);
+    closeModal('customer-archive-modal');
+    openAddDebtModal();
+    document.getElementById('debt-customer').value = g ? g.customerName : '';
+  };
+
+  window.archiveDebtPayment = function(id) {
+    closeModal('customer-archive-modal');
+    openDebtPayment(id);
+  };
+
+  window.archiveEditDebt = function(id) {
+    closeModal('customer-archive-modal');
+    editDebt(id);
+  };
+
+  window.archiveDeleteDebt = function(id) {
+    deleteDebt(id);
   };
 
   // SUPPLIERS (الموردين)
@@ -4082,7 +4239,7 @@ ${bodyHTML}
     if (!name || !phone) { showToast('warning','يرجى إدخال الاسم ورقم الهاتف على الأقل'); return; }
 
     const today = new Date().toLocaleDateString('ar-SY');
-    const cust = { name, phone, email, company, city, type, notes, date: today };
+    const cust = { id:'CUST-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name, phone, email, company, city, type, notes, date: today };
     window._customers.push(cust);
     window._saveData();
 
